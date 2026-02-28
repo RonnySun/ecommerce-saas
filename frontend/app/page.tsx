@@ -1,12 +1,12 @@
 "use client"
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 
 const API = "http://localhost:8000/api/v1"
-const TENANT_ID = 1
 
 const platformColor: Record<string, string> = {
   taobao: "bg-orange-100 text-orange-700",
@@ -19,23 +19,40 @@ const platformLabel: Record<string, string> = {
 }
 
 export default function Dashboard() {
+  const router = useRouter()
   const [overview, setOverview] = useState<any>(null)
   const [trend, setTrend] = useState<any[]>([])
   const [stores, setStores] = useState<any[]>([])
+  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const token = localStorage.getItem("token")
+    const u = localStorage.getItem("user")
+    if (!token) { router.push("/login"); return }
+    if (u) setUser(JSON.parse(u))
+
+    const tenantId = JSON.parse(u || "{}").tenant_id || 1
+    const headers = { Authorization: `Bearer ${token}` }
+
     Promise.all([
-      fetch(`${API}/stats/overview?tenant_id=${TENANT_ID}&days=7`).then(r => r.json()),
-      fetch(`${API}/stats/trend?tenant_id=${TENANT_ID}&days=7`).then(r => r.json()),
-      fetch(`${API}/stats/stores?tenant_id=${TENANT_ID}&days=1`).then(r => r.json()),
+      fetch(`${API}/stats/overview?tenant_id=${tenantId}&days=7`, { headers }).then(r => r.json()),
+      fetch(`${API}/stats/trend?tenant_id=${tenantId}&days=7`, { headers }).then(r => r.json()),
+      fetch(`${API}/stats/stores?tenant_id=${tenantId}&days=1`, { headers }).then(r => r.json()),
     ]).then(([ov, tr, st]) => {
+      if (ov.detail) { router.push("/login"); return }
       setOverview(ov)
       setTrend(tr.map((d: any) => ({ ...d, date: d.date.slice(5) })))
       setStores(st)
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => router.push("/login"))
   }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    router.push("/login")
+  }
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-gray-400">
@@ -53,11 +70,32 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">📊 多店铺经营看板</h1>
-          <p className="text-gray-500 text-sm mt-1">实时数据 · {new Date().toLocaleDateString("zh-CN")}</p>
+        {/* 顶部导航 */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">📊 多店铺经营看板</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              {user?.tenant_name} · {user?.full_name}
+              <Badge className="ml-2 text-xs bg-indigo-100 text-indigo-700">{user?.plan}</Badge>
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.push("/finance")}
+              className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+            >
+              💰 财务分析
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 border text-sm rounded-md hover:bg-gray-100"
+            >
+              退出
+            </button>
+          </div>
         </div>
 
+        {/* 核心指标 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {metrics.map(item => (
             <Card key={item.label}>
@@ -80,9 +118,7 @@ export default function Dashboard() {
 
           <TabsContent value="trend">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">近7天 GMV / 利润 / 广告费趋势</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">近7天 GMV / 利润 / 广告费趋势</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={trend}>
@@ -100,9 +136,7 @@ export default function Dashboard() {
 
           <TabsContent value="stores">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">今日各店铺数据（数据库实时）</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">今日各店铺数据</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={stores} layout="vertical">
