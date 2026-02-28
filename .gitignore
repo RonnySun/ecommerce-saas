@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# 环境变量（敏感信息不提交）
+.env
+.env.local
+.env.production
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+
+# macOS
+.DS_Store
+*.DS_Store
+
+# 日志
+*.log
+
+# IDE
+.vscode/
+.idea/
