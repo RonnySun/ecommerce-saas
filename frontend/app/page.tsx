@@ -3,26 +3,10 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts"
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 
-// 从模拟数据文件加载（后续替换为API调用）
-const mockStats = [
-  { date: "02-23", gmv: 218320, profit: 42100, adCost: 28500 },
-  { date: "02-24", gmv: 195800, profit: 38200, adCost: 24100 },
-  { date: "02-25", gmv: 267400, profit: 51800, adCost: 33200 },
-  { date: "02-26", gmv: 289100, profit: 56300, adCost: 38900 },
-  { date: "02-27", gmv: 243600, profit: 47200, adCost: 31400 },
-  { date: "02-28", gmv: 312000, profit: 61500, adCost: 42100 },
-  { date: "03-01", gmv: 218319, profit: 38000, adCost: 29800 },
-]
-
-const storeData = [
-  { name: "天猫旗舰店", gmv: 80901, roi: 4.2, platform: "taobao" },
-  { name: "京东自营店", gmv: 60479, roi: 3.8, platform: "jd" },
-  { name: "拼多多店", gmv: 27210, roi: 2.1, platform: "pdd" },
-  { name: "乐购天猫店", gmv: 35293, roi: 3.5, platform: "taobao" },
-  { name: "乐购独立站", gmv: 14435, roi: 5.1, platform: "shopify" },
-]
+const API = "http://localhost:8000/api/v1"
+const TENANT_ID = 1
 
 const platformColor: Record<string, string> = {
   taobao: "bg-orange-100 text-orange-700",
@@ -30,107 +14,125 @@ const platformColor: Record<string, string> = {
   pdd: "bg-green-100 text-green-700",
   shopify: "bg-purple-100 text-purple-700",
 }
-
 const platformLabel: Record<string, string> = {
   taobao: "天猫", jd: "京东", pdd: "拼多多", shopify: "独立站"
 }
 
 export default function Dashboard() {
-  const todayGMV = storeData.reduce((s, i) => s + i.gmv, 0)
-  const todayProfit = mockStats[mockStats.length - 1].profit
+  const [overview, setOverview] = useState<any>(null)
+  const [trend, setTrend] = useState<any[]>([])
+  const [stores, setStores] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API}/stats/overview?tenant_id=${TENANT_ID}&days=7`).then(r => r.json()),
+      fetch(`${API}/stats/trend?tenant_id=${TENANT_ID}&days=7`).then(r => r.json()),
+      fetch(`${API}/stats/stores?tenant_id=${TENANT_ID}&days=1`).then(r => r.json()),
+    ]).then(([ov, tr, st]) => {
+      setOverview(ov)
+      setTrend(tr.map((d: any) => ({ ...d, date: d.date.slice(5) })))
+      setStores(st)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center text-gray-400">
+      <p>📊 数据加载中...</p>
+    </div>
+  )
+
+  const metrics = overview ? [
+    { label: "近7日总GMV", value: `¥${(overview.gmv / 10000).toFixed(1)}万`, change: `${overview.gmv_change > 0 ? "+" : ""}${overview.gmv_change}%`, up: overview.gmv_change >= 0 },
+    { label: "近7日净利润", value: `¥${(overview.profit / 10000).toFixed(1)}万`, change: `${overview.profit_change > 0 ? "+" : ""}${overview.profit_change}%`, up: overview.profit_change >= 0 },
+    { label: "近7日订单数", value: overview.orders.toLocaleString(), change: `${overview.orders_change > 0 ? "+" : ""}${overview.orders_change}%`, up: overview.orders_change >= 0 },
+    { label: "平均ROI", value: overview.roi.toFixed(2), change: "近7日", up: true },
+  ] : []
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      {/* 顶部标题 */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">📊 多店铺经营看板</h1>
-        <p className="text-gray-500 text-sm mt-1">今日数据 · 2026-03-01</p>
-      </div>
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">📊 多店铺经营看板</h1>
+          <p className="text-gray-500 text-sm mt-1">实时数据 · {new Date().toLocaleDateString("zh-CN")}</p>
+        </div>
 
-      {/* 核心指标卡片 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "今日总GMV", value: `¥${(todayGMV/10000).toFixed(1)}万`, change: "+12.3%", up: true },
-          { label: "今日净利润", value: `¥${(todayProfit/10000).toFixed(1)}万`, change: "+8.7%", up: true },
-          { label: "总订单数", value: "1,284", change: "+5.2%", up: true },
-          { label: "平均ROI", value: "3.74", change: "-0.3", up: false },
-        ].map((item) => (
-          <Card key={item.label}>
-            <CardContent className="pt-4">
-              <p className="text-xs text-gray-500">{item.label}</p>
-              <p className="text-2xl font-bold mt-1">{item.value}</p>
-              <p className={`text-xs mt-1 ${item.up ? "text-green-600" : "text-red-500"}`}>
-                {item.change} 较昨日
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {metrics.map(item => (
+            <Card key={item.label}>
+              <CardContent className="pt-4">
+                <p className="text-xs text-gray-500">{item.label}</p>
+                <p className="text-2xl font-bold mt-1">{item.value}</p>
+                <p className={`text-xs mt-1 ${item.up ? "text-green-600" : "text-red-500"}`}>
+                  {item.change} 较上期
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList className="mb-4">
-          <TabsTrigger value="overview">趋势总览</TabsTrigger>
-          <TabsTrigger value="stores">店铺对比</TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="trend">
+          <TabsList className="mb-4">
+            <TabsTrigger value="trend">趋势总览</TabsTrigger>
+            <TabsTrigger value="stores">今日店铺</TabsTrigger>
+          </TabsList>
 
-        {/* 趋势图 */}
-        <TabsContent value="overview">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">近7天GMV & 利润趋势</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={mockStats}>
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v/10000).toFixed(0)}万`} />
-                  <Tooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />
-                  <Line type="monotone" dataKey="gmv" stroke="#6366f1" strokeWidth={2} name="GMV" dot={false} />
-                  <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} name="净利润" dot={false} />
-                  <Line type="monotone" dataKey="adCost" stroke="#f59e0b" strokeWidth={2} name="广告费" dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
+          <TabsContent value="trend">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">近7天 GMV / 利润 / 广告费趋势</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={trend}>
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `${(v / 10000).toFixed(0)}万`} />
+                    <Tooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />
+                    <Line type="monotone" dataKey="gmv" stroke="#6366f1" strokeWidth={2} name="GMV" dot={false} />
+                    <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} name="净利润" dot={false} />
+                    <Line type="monotone" dataKey="ad_cost" stroke="#f59e0b" strokeWidth={2} name="广告费" dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* 店铺对比 */}
-        <TabsContent value="stores">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">今日各店铺GMV</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={storeData} layout="vertical">
-                  <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `¥${(v/1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                  <Tooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />
-                  <Bar dataKey="gmv" fill="#6366f1" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-
-              {/* 店铺列表 */}
-              <div className="mt-4 space-y-2">
-                {storeData.map((store) => (
-                  <div key={store.name} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div className="flex items-center gap-2">
-                      <Badge className={platformColor[store.platform]}>
-                        {platformLabel[store.platform]}
-                      </Badge>
-                      <span className="text-sm">{store.name}</span>
+          <TabsContent value="stores">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">今日各店铺数据（数据库实时）</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={stores} layout="vertical">
+                    <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={v => `¥${(v / 1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
+                    <Tooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />
+                    <Bar dataKey="gmv" fill="#6366f1" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 space-y-2">
+                  {stores.map(store => (
+                    <div key={store.store_id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div className="flex items-center gap-2">
+                        <Badge className={platformColor[store.platform] || "bg-gray-100 text-gray-600"}>
+                          {platformLabel[store.platform] || store.platform}
+                        </Badge>
+                        <span className="text-sm">{store.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">¥{store.gmv.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">ROI: {store.roi} · 利润: ¥{store.profit.toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">¥{store.gmv.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">ROI: {store.roi}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

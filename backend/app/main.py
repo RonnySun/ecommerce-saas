@@ -25,6 +25,6 @@ async def root():
 async def health():
     return {"status": "ok", "version": settings.APP_VERSION}
 
-# 路由注册（后续逐步添加）
-# from app.api.v1 import router
-# app.include_router(router, prefix="/api/v1")
+# 路由注册
+from app.api.v1 import router
+app.include_router(router, prefix="/api/v1")
