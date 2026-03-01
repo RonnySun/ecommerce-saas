@@ -18,9 +18,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24小时
     
-    # Claude API
+    # MiniMax API（Anthropic 兼容）
     ANTHROPIC_API_KEY: Optional[str] = None
-    
+    MINIMAX_BASE_URL: str = "https://api.minimaxi.com/anthropic"
+
     # OpenClaw
     OPENCLAW_API_URL: str = "http://127.0.0.1:18789"
     

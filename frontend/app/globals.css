@@ -122,5 +122,66 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #f5f5f7;
   }
+}
+
+/* ── 设计系统变量 ─────────────────────────── */
+:root {
+  --bg:         #f2f2f7;
+  --card:       #ffffff;
+  --blue:       #0071e3;
+  --blue-hover: #0077ed;
+  --blue-alpha: rgba(0,113,227,0.10);
+  --green:      #30d158;
+  --red:        #ff453a;
+  --orange:     #ff9f0a;
+  --purple:     #bf5af2;
+  --text:       #1d1d1f;
+  --text-2:     #3a3a3c;
+  --text-3:     #6e6e73;
+  --text-4:     #8e8e93;
+  --text-5:     #aeaeb2;
+  --border:     #e5e5ea;
+  --border-2:   #f2f2f7;
+
+  /* 旧变量保持向后兼容 */
+  --apple-bg: #f2f2f7;
+  --apple-card: #ffffff;
+  --apple-blue: #0071e3;
+  --apple-blue-hover: #0077ed;
+  --apple-text: #1d1d1f;
+  --apple-text-secondary: #6e6e73;
+  --apple-border: #d2d2d7;
+  --apple-green: #30d158;
+  --apple-red: #ff453a;
+  --apple-orange: #ff9f0a;
+}
+
+/* ── 全局增强 ─────────────────────────────── */
+
+/* 更优雅的滚动条 */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.14);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.26); }
+
+/* 所有按钮统一过渡 */
+button {
+  transition: background-color 0.15s ease, color 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.15s ease, opacity 0.15s ease;
+}
+
+/* input / select focus ring 统一风格 */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #0071e3 !important;
+  box-shadow: 0 0 0 3px rgba(0,113,227,0.15) !important;
 }

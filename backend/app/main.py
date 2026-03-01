@@ -9,9 +9,14 @@ app = FastAPI(
 )
 
 # CORS（允许前端访问）
+# 生产环境通过 ALLOWED_ORIGINS 环境变量配置，多个域名用逗号分隔
+import os
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
