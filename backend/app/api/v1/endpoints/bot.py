@@ -16,9 +16,13 @@ router = APIRouter()
 BOT_API_TOKEN = "bot-ecommerce-saas-2024"
 
 
-def verify_bot_token(x_bot_token: str = Header(None)):
-    """验证Bot专用令牌"""
-    if x_bot_token != BOT_API_TOKEN:
+def verify_bot_token(
+    x_bot_token: str = Header(None),
+    token: str = Query(None, description="Bot Token（也可通过URL参数传入，用于web_fetch工具）"),
+):
+    """验证Bot专用令牌 - 支持Header和Query Parameter两种方式"""
+    provided_token = x_bot_token or token
+    if provided_token != BOT_API_TOKEN:
         raise HTTPException(status_code=401, detail="无效的Bot令牌，请使用正确的 X-Bot-Token")
     return True
 
