@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+const API = "/api/v1"
 
 const FIELD_LABELS: Record<string, string> = {
   order_no:     "订单号",

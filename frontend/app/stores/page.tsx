@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+const API = "/api/v1"
 
 const PLATFORMS = [
   { value: "taobao",  label: "淘宝 / 天猫" },

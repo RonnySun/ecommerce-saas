@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+const API = "/api/v1"
 
 /* ── 平台配置 ─────────────────────────────── */
 const PLATFORM: Record<string, { color: string; bg: string; label: string }> = {

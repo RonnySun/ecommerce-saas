@@ -14,8 +14,7 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     try {
-      const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
-      const res = await fetch(`${BASE}/auth/login`, {
+      const res = await fetch(`/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: `username=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
