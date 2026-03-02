@@ -34,6 +34,9 @@ class ChatResponse(BaseModel):
     reply: str
     session_id: str
     tools_called: List[str] = []
+    model: str = "MiniMax-M2.5"
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 # ---- MiniMax 客户端 ----
@@ -365,16 +368,24 @@ async def agent_chat(
     client = get_ai_client()
     messages = [{"role": "user", "content": req.message}]
     tools_called: List[str] = []
+    total_input_tokens  = 0
+    total_output_tokens = 0
+    MODEL_NAME = "MiniMax-M2.5"
 
     # Agentic loop（最多 5 轮工具调用）
     for _ in range(5):
         response = client.messages.create(
-            model="MiniMax-M2.5",
+            model=MODEL_NAME,
             max_tokens=1024,
             system=system_prompt,
             tools=TOOLS,
             messages=messages,
         )
+
+        # 累计每轮 token 用量
+        if hasattr(response, "usage") and response.usage:
+            total_input_tokens  += getattr(response.usage, "input_tokens",  0) or 0
+            total_output_tokens += getattr(response.usage, "output_tokens", 0) or 0
 
         # 模型决定直接回答，不调用工具
         if response.stop_reason == "end_turn":
@@ -383,7 +394,14 @@ async def agent_chat(
                 (block.text for block in response.content if block.type == "text"),
                 "抱歉，暂时无法回答这个问题，请换个方式提问。",
             )
-            return ChatResponse(reply=reply, session_id=session_id, tools_called=tools_called)
+            return ChatResponse(
+                reply=reply,
+                session_id=session_id,
+                tools_called=tools_called,
+                model=MODEL_NAME,
+                input_tokens=total_input_tokens,
+                output_tokens=total_output_tokens,
+            )
 
         # 模型要调用工具
         if response.stop_reason == "tool_use":
@@ -409,4 +427,7 @@ async def agent_chat(
         reply="数据已获取，但回答生成超时，请重试。",
         session_id=session_id,
         tools_called=tools_called,
+        model=MODEL_NAME,
+        input_tokens=total_input_tokens,
+        output_tokens=total_output_tokens,
     )

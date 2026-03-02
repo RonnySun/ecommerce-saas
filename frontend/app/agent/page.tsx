@@ -211,7 +211,12 @@ function UserBubble({ content }: { content: string }) {
   )
 }
 
-function AiBubble({ content }: { content: string }) {
+function AiBubble({ content, model, inputTokens, outputTokens }: {
+  content: string
+  model?: string
+  inputTokens?: number
+  outputTokens?: number
+}) {
   return (
     <div className="flex gap-3 mb-4">
       {/* AI 头像 */}
@@ -224,15 +229,36 @@ function AiBubble({ content }: { content: string }) {
         </svg>
       </div>
       {/* 内容卡片 */}
-      <div
-        className="flex-1 px-4 py-3 rounded-2xl rounded-tl-md"
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)",
-          border: "1px solid rgba(0,0,0,0.04)",
-        }}
-      >
-        <MarkdownContent text={content} />
+      <div className="flex-1">
+        <div
+          className="px-4 py-3 rounded-2xl rounded-tl-md"
+          style={{
+            backgroundColor: "#fff",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)",
+            border: "1px solid rgba(0,0,0,0.04)",
+          }}
+        >
+          <MarkdownContent text={content} />
+        </div>
+        {/* 模型 + Token 信息 */}
+        {(model || (inputTokens !== undefined && inputTokens > 0)) && (
+          <div className="flex items-center gap-2 mt-1.5 px-1" style={{ color: "#aeaeb2", fontSize: 10 }}>
+            {model && (
+              <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                </svg>
+                {model}
+              </span>
+            )}
+            {model && inputTokens !== undefined && <span style={{ opacity: 0.4 }}>·</span>}
+            {inputTokens !== undefined && inputTokens > 0 && (
+              <span title={`输入 ${inputTokens} + 输出 ${outputTokens} tokens`}>
+                ↑{inputTokens} ↓{outputTokens} tokens
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -266,7 +292,7 @@ function LoadingBubble() {
 export default function AgentPage() {
   const router          = useRouter()
   const [user,          setUser]          = useState<any>(null)
-  const [messages,      setMessages]      = useState<{ role: string; content: string }[]>([])
+  const [messages,      setMessages]      = useState<{ role: string; content: string; model?: string; inputTokens?: number; outputTokens?: number }[]>([])
   const [input,         setInput]         = useState("")
   const [loading,       setLoading]       = useState(false)
   const [sessionId,     setSessionId]     = useState<string | null>(null)
@@ -307,7 +333,13 @@ export default function AgentPage() {
       })
       const data = await res.json()
       if (data.session_id) setSessionId(data.session_id)
-      setMessages(prev => [...prev, { role: "assistant", content: data.reply || data.detail || "抱歉，出现了错误" }])
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: data.reply || data.detail || "抱歉，出现了错误",
+        model: data.model,
+        inputTokens: data.input_tokens,
+        outputTokens: data.output_tokens,
+      }])
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "连接失败，请检查后端服务是否运行。" }])
     } finally {
@@ -352,6 +384,7 @@ export default function AgentPage() {
               </div>
               <h2 className="font-bold mb-2" style={{ color: "#1d1d1f", fontSize: 22, letterSpacing: "-0.03em" }}>秒算</h2>
               <p className="text-sm" style={{ color: "#8e8e93" }}>用自然语言查询你的店铺数据，获取专业分析建议</p>
+              <p className="text-xs mt-1" style={{ color: "#c5c5ca" }}>MiniMax-M2.5 · 基于openclaw架构</p>
 
               {/* 快捷问题 */}
               <div className="grid grid-cols-2 gap-3 mt-8 text-left">
@@ -379,7 +412,7 @@ export default function AgentPage() {
           {messages.map((msg, idx) =>
             msg.role === "user"
               ? <UserBubble key={idx} content={msg.content} />
-              : <AiBubble   key={idx} content={msg.content} />
+              : <AiBubble   key={idx} content={msg.content} model={msg.model} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} />
           )}
 
           {loading && <LoadingBubble />}
