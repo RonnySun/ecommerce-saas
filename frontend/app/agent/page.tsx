@@ -211,11 +211,12 @@ function UserBubble({ content }: { content: string }) {
   )
 }
 
-function AiBubble({ content, model, inputTokens, outputTokens }: {
+function AiBubble({ content, model, inputTokens, outputTokens, elapsed }: {
   content: string
   model?: string
   inputTokens?: number
   outputTokens?: number
+  elapsed?: string
 }) {
   return (
     <div className="flex gap-3 mb-4">
@@ -253,9 +254,20 @@ function AiBubble({ content, model, inputTokens, outputTokens }: {
             )}
             {model && inputTokens !== undefined && <span style={{ opacity: 0.4 }}>·</span>}
             {inputTokens !== undefined && inputTokens > 0 && (
-              <span title={`输入 ${inputTokens} + 输出 ${outputTokens} tokens`}>
+              <span title={`输入 ${inputTokens}（含prompt）+ 输出 ${outputTokens} tokens，双向计费`}>
                 ↑{inputTokens} ↓{outputTokens} tokens
               </span>
+            )}
+            {elapsed && (
+              <>
+                <span style={{ opacity: 0.4 }}>·</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                  </svg>
+                  {elapsed}s
+                </span>
+              </>
             )}
           </div>
         )}
@@ -264,7 +276,16 @@ function AiBubble({ content, model, inputTokens, outputTokens }: {
   )
 }
 
-function LoadingBubble() {
+function LoadingBubble({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Date.now() - startTime), 100)
+    return () => clearInterval(id)
+  }, [startTime])
+
+  const secs = (elapsed / 1000).toFixed(1)
+
   return (
     <div className="flex gap-3 mb-4">
       <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
@@ -273,16 +294,49 @@ function LoadingBubble() {
           <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 0 2h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1 0-2h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2zm-3 9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm6 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" fill="white" />
         </svg>
       </div>
-      <div className="px-4 py-3 rounded-2xl rounded-tl-md flex items-center gap-1.5"
-        style={{ backgroundColor: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.04)" }}>
-        {[0, 1, 2].map(n => (
-          <span key={n} className="w-2 h-2 rounded-full"
-            style={{
-              backgroundColor: "#c5c5ca",
-              animation: `bounce 1.2s ease-in-out ${n * 0.2}s infinite`,
-            }} />
-        ))}
-        <style>{`@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }`}</style>
+      <div>
+        <div className="px-4 py-3 rounded-2xl rounded-tl-md flex items-center gap-2"
+          style={{ backgroundColor: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.04)" }}>
+          {/* 跳动点 */}
+          <div className="flex items-center gap-1.5">
+            {[0, 1, 2].map(n => (
+              <span key={n} className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: "#c5c5ca", animation: `bounce 1.2s ease-in-out ${n * 0.2}s infinite` }} />
+            ))}
+          </div>
+          {/* 分隔 */}
+          <span style={{ width: 1, height: 14, backgroundColor: "#e5e5ea", flexShrink: 0 }} />
+          {/* 状态文字 */}
+          <span style={{ fontSize: 11, color: "#8e8e93", whiteSpace: "nowrap" }}>
+            正在分析
+            <span style={{
+              display: "inline-block",
+              width: 16,
+              textAlign: "left",
+              animation: "ellipsis 1.5s steps(3,end) infinite",
+            }}>...</span>
+          </span>
+        </div>
+        {/* 模型 + 计时 */}
+        <div className="flex items-center gap-2 mt-1.5 px-1" style={{ color: "#aeaeb2", fontSize: 10 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+            </svg>
+            MiniMax-M2.5
+          </span>
+          <span style={{ opacity: 0.4 }}>·</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+            {secs}s
+          </span>
+        </div>
+        <style>{`
+          @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+          @keyframes ellipsis { 0%{content:"."} 33%{content:".."} 66%{content:"..."} }
+        `}</style>
       </div>
     </div>
   )
@@ -292,10 +346,11 @@ function LoadingBubble() {
 export default function AgentPage() {
   const router          = useRouter()
   const [user,          setUser]          = useState<any>(null)
-  const [messages,      setMessages]      = useState<{ role: string; content: string; model?: string; inputTokens?: number; outputTokens?: number }[]>([])
+  const [messages,      setMessages]      = useState<{ role: string; content: string; model?: string; inputTokens?: number; outputTokens?: number; elapsed?: string }[]>([])
   const [input,         setInput]         = useState("")
-  const [loading,       setLoading]       = useState(false)
-  const [sessionId,     setSessionId]     = useState<string | null>(null)
+  const [loading,          setLoading]          = useState(false)
+  const [loadingStartTime, setLoadingStartTime] = useState<number>(0)
+  const [sessionId,        setSessionId]        = useState<string | null>(null)
   const messagesEndRef  = useRef<HTMLDivElement>(null)
   const textareaRef     = useRef<HTMLTextAreaElement>(null)
 
@@ -323,6 +378,8 @@ export default function AgentPage() {
     setMessages(prev => [...prev, { role: "user", content: text }])
     setInput("")
     if (textareaRef.current) textareaRef.current.style.height = "40px"
+    const t0 = Date.now()
+    setLoadingStartTime(t0)
     setLoading(true)
 
     try {
@@ -332,6 +389,7 @@ export default function AgentPage() {
         body: JSON.stringify({ tenant_id: tenantId, token: BOT_TOKEN, message: text, session_id: sessionId }),
       })
       const data = await res.json()
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
       if (data.session_id) setSessionId(data.session_id)
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -339,6 +397,7 @@ export default function AgentPage() {
         model: data.model,
         inputTokens: data.input_tokens,
         outputTokens: data.output_tokens,
+        elapsed,
       }])
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "连接失败，请检查后端服务是否运行。" }])
@@ -412,10 +471,10 @@ export default function AgentPage() {
           {messages.map((msg, idx) =>
             msg.role === "user"
               ? <UserBubble key={idx} content={msg.content} />
-              : <AiBubble   key={idx} content={msg.content} model={msg.model} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} />
+              : <AiBubble   key={idx} content={msg.content} model={msg.model} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} elapsed={msg.elapsed} />
           )}
 
-          {loading && <LoadingBubble />}
+          {loading && <LoadingBubble startTime={loadingStartTime} />}
           <div ref={messagesEndRef} />
         </div>
       </div>
