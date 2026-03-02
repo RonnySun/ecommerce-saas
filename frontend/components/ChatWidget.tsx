@@ -21,13 +21,13 @@ function MarkdownContent({ text }: { text: string }) {
 
   while (i < lines.length) {
     const line = lines[i]
-    if (line.trim() === "") { elements.push(<div key={i} style={{ height: 4 }} />); i++; continue }
+    if (line.trim() === "") { elements.push(<div key={elements.length} style={{ height: 4 }} />); i++; continue }
     if (line.startsWith("### ")) {
-      elements.push(<p key={i} style={{ fontWeight: 600, color: "#1d1d1f", fontSize: 12, marginTop: 8, marginBottom: 2 }}>{renderInline(line.slice(4))}</p>)
+      elements.push(<p key={elements.length} style={{ fontWeight: 600, color: "#1d1d1f", fontSize: 12, marginTop: 8, marginBottom: 2 }}>{renderInline(line.slice(4))}</p>)
       i++; continue
     }
     if (line.startsWith("## ")) {
-      elements.push(<p key={i} style={{ fontWeight: 700, color: "#1d1d1f", fontSize: 13, marginTop: 10, marginBottom: 3 }}>{renderInline(line.slice(3))}</p>)
+      elements.push(<p key={elements.length} style={{ fontWeight: 700, color: "#1d1d1f", fontSize: 13, marginTop: 10, marginBottom: 3 }}>{renderInline(line.slice(3))}</p>)
       i++; continue
     }
     if (line.trim().startsWith("|")) {
@@ -35,7 +35,7 @@ function MarkdownContent({ text }: { text: string }) {
       while (i < lines.length && lines[i].trim().startsWith("|")) { tableLines.push(lines[i]); i++ }
       const rows = tableLines.filter(l => !l.match(/^\s*\|[\s\-:|]+\|\s*$/))
       elements.push(
-        <div key={i} style={{ overflowX: "auto", margin: "4px 0", borderRadius: 8, border: "1px solid #e5e5ea" }}>
+        <div key={elements.length} style={{ overflowX: "auto", margin: "4px 0", borderRadius: 8, border: "1px solid #e5e5ea" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
             <tbody>
               {rows.map((row, ri) => {
@@ -61,7 +61,7 @@ function MarkdownContent({ text }: { text: string }) {
         items.push(lines[i].replace(/^[-•]\s/, "")); i++
       }
       elements.push(
-        <ul key={i} style={{ paddingLeft: 14, margin: "3px 0" }}>
+        <ul key={elements.length} style={{ paddingLeft: 14, margin: "3px 0" }}>
           {items.map((item, ii) => <li key={ii} style={{ color: "#3a3a3c", fontSize: 12, marginBottom: 2, lineHeight: 1.5 }}>{renderInline(item)}</li>)}
         </ul>
       )
@@ -71,30 +71,49 @@ function MarkdownContent({ text }: { text: string }) {
       const items: string[] = []
       while (i < lines.length && lines[i].match(/^\d+\.\s/)) { items.push(lines[i].replace(/^\d+\.\s/, "")); i++ }
       elements.push(
-        <ol key={i} style={{ paddingLeft: 16, margin: "3px 0" }}>
+        <ol key={elements.length} style={{ paddingLeft: 16, margin: "3px 0" }}>
           {items.map((item, ii) => <li key={ii} style={{ color: "#3a3a3c", fontSize: 12, marginBottom: 2, lineHeight: 1.5 }}>{renderInline(item)}</li>)}
         </ol>
       )
       continue
     }
-    elements.push(<p key={i} style={{ color: "#3a3a3c", fontSize: 12, lineHeight: 1.65, margin: "1px 0" }}>{renderInline(line)}</p>)
+    elements.push(<p key={elements.length} style={{ color: "#3a3a3c", fontSize: 12, lineHeight: 1.65, margin: "1px 0" }}>{renderInline(line)}</p>)
     i++
   }
   return <div>{elements}</div>
 }
 
-/* ── 主组件 ─────────────────────────────── */
-export default function ChatWidget() {
-  const [open,      setOpen]      = useState(true)
-  const [messages,  setMessages]  = useState<{ role: string; content: string }[]>([])
-  const [input,     setInput]     = useState("")
-  const [loading,   setLoading]   = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [tenantId,  setTenantId]  = useState(1)
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const inputRef    = useRef<HTMLTextAreaElement>(null)
+/* ── 实时计时器（loading 气泡内用）─────────── */
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Date.now() - startTime), 100)
+    return () => clearInterval(id)
+  }, [startTime])
+  return <span>{(elapsed / 1000).toFixed(1)}s</span>
+}
 
-  // 从 localStorage 读租户 ID
+/* ── 主组件 ─────────────────────────────── */
+type Msg = {
+  role: string
+  content: string
+  model?: string
+  inputTokens?: number
+  outputTokens?: number
+  elapsed?: string
+}
+
+export default function ChatWidget() {
+  const [open,             setOpen]             = useState(true)
+  const [messages,         setMessages]         = useState<Msg[]>([])
+  const [input,            setInput]            = useState("")
+  const [loading,          setLoading]          = useState(false)
+  const [loadingStartTime, setLoadingStartTime] = useState<number>(0)
+  const [sessionId,        setSessionId]        = useState<string | null>(null)
+  const [tenantId,         setTenantId]         = useState(1)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef  = useRef<HTMLTextAreaElement>(null)
+
   useEffect(() => {
     try {
       const u = localStorage.getItem("user")
@@ -114,6 +133,8 @@ export default function ChatWidget() {
     if (!text.trim() || loading) return
     setMessages(prev => [...prev, { role: "user", content: text }])
     setInput("")
+    const t0 = Date.now()
+    setLoadingStartTime(t0)
     setLoading(true)
     try {
       const res = await fetch(`${API}/agent/chat`, {
@@ -122,8 +143,16 @@ export default function ChatWidget() {
         body: JSON.stringify({ tenant_id: tenantId, token: BOT_TOKEN, message: text, session_id: sessionId }),
       })
       const data = await res.json()
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
       if (data.session_id) setSessionId(data.session_id)
-      setMessages(prev => [...prev, { role: "assistant", content: data.reply || data.detail || "出错了，请重试" }])
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: data.reply || data.detail || "出错了，请重试",
+        model: data.model,
+        inputTokens: data.input_tokens,
+        outputTokens: data.output_tokens,
+        elapsed,
+      }])
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "连接失败，请检查后端服务。" }])
     } finally {
@@ -133,9 +162,17 @@ export default function ChatWidget() {
 
   const SUGGESTED = ["近7天整体情况？", "哪个店铺ROI最差？", "有异常预警吗？", "财务成本拆分"]
 
+  /* 小图标复用 */
+  const helmIcon = (size: number) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2"/>
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  )
+
   return (
     <>
-      {/* 浮动按钮 */}
+      {/* 浮动按钮（最小化时显示） */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
@@ -152,12 +189,7 @@ export default function ChatWidget() {
           onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(88,86,214,0.45), 0 1px 4px rgba(0,0,0,0.12)" }}
           title="秒算"
         >
-          {/* 舵轮图标 */}
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2"/>
-            <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          {/* 未读提示 */}
+          {helmIcon(24)}
           {messages.length > 0 && (
             <span style={{
               position: "absolute", top: -4, right: -4,
@@ -176,20 +208,16 @@ export default function ChatWidget() {
       {open && (
         <div style={{
           position: "fixed", bottom: 20, right: 20, zIndex: 9999,
-          width: 380, height: 560,
-          borderRadius: 20,
+          width: 380, height: 560, borderRadius: 20,
           backgroundColor: "#fff",
           boxShadow: "0 16px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
-          display: "flex", flexDirection: "column",
-          overflow: "hidden",
+          display: "flex", flexDirection: "column", overflow: "hidden",
           border: "1px solid rgba(0,0,0,0.06)",
           animation: "slideUp 0.22s cubic-bezier(0.34,1.56,0.64,1)",
         }}>
           <style>{`
-            @keyframes slideUp {
-              from { opacity: 0; transform: translateY(16px) scale(0.96); }
-              to   { opacity: 1; transform: translateY(0) scale(1); }
-            }
+            @keyframes slideUp { from{opacity:0;transform:translateY(16px) scale(0.96)} to{opacity:1;transform:translateY(0) scale(1)} }
+            @keyframes wBounce  { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
           `}</style>
 
           {/* 顶栏 */}
@@ -198,15 +226,8 @@ export default function ChatWidget() {
             background: "linear-gradient(135deg,#5856d6 0%,#af52de 100%)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 10,
-                backgroundColor: "rgba(255,255,255,0.2)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2"/>
-                  <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
+              <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {helmIcon(16)}
               </div>
               <div>
                 <p style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>秒算</p>
@@ -214,20 +235,16 @@ export default function ChatWidget() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              {/* 清空会话 */}
               <button onClick={() => { setMessages([]); setSessionId(null) }}
-                style={{ width: 28, height: 28, borderRadius: 8, border: "none", backgroundColor: "rgba(255,255,255,0.15)", cursor: "pointer", color: "#fff", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}
-                title="清空会话"
-              >
+                style={{ width: 28, height: 28, borderRadius: 8, border: "none", backgroundColor: "rgba(255,255,255,0.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                title="清空会话">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                   <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
-              {/* 最小化 */}
               <button onClick={() => setOpen(false)}
-                style={{ width: 28, height: 28, borderRadius: 8, border: "none", backgroundColor: "rgba(255,255,255,0.15)", cursor: "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}
-                title="最小化"
-              >
+                style={{ width: 28, height: 28, borderRadius: 8, border: "none", backgroundColor: "rgba(255,255,255,0.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                title="最小化">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                   <path d="M5 12h14" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
                 </svg>
@@ -238,19 +255,13 @@ export default function ChatWidget() {
           {/* 消息区域 */}
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column" }}>
             {/* 空状态 */}
-            {messages.length === 0 && (
+            {messages.length === 0 && !loading && (
               <div>
-                <p style={{ textAlign: "center", color: "#8e8e93", fontSize: 12, marginBottom: 12 }}>
-                  有什么需要分析的，直接问我
-                </p>
+                <p style={{ textAlign: "center", color: "#8e8e93", fontSize: 12, marginBottom: 12 }}>有什么需要分析的，直接问我</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {SUGGESTED.map(q => (
                     <button key={q} onClick={() => sendMessage(q)}
-                      style={{
-                        padding: "8px 10px", borderRadius: 10, border: "1px solid #e5e5ea",
-                        backgroundColor: "#f9f9fb", cursor: "pointer", textAlign: "left",
-                        fontSize: 12, color: "#3a3a3c", lineHeight: 1.4,
-                      }}
+                      style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #e5e5ea", backgroundColor: "#f9f9fb", cursor: "pointer", textAlign: "left", fontSize: 12, color: "#3a3a3c", lineHeight: 1.4 }}
                       onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#f0f0f5"; e.currentTarget.style.borderColor = "rgba(88,86,214,0.3)" }}
                       onMouseLeave={e => { e.currentTarget.style.backgroundColor = "#f9f9fb"; e.currentTarget.style.borderColor = "#e5e5ea" }}
                     >
@@ -263,47 +274,93 @@ export default function ChatWidget() {
 
             {/* 消息列表 */}
             {messages.map((msg, idx) => (
-              <div key={idx} style={{ marginBottom: 10, display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", alignItems: "flex-start", gap: 8 }}>
-                {msg.role === "assistant" && (
-                  <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, background: "linear-gradient(135deg,#5856d6,#af52de)", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2 }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2"/>
-                      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
+              <div key={idx} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", alignItems: "flex-start", gap: 8 }}>
+                  {msg.role === "assistant" && (
+                    <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, background: "linear-gradient(135deg,#5856d6,#af52de)", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2 }}>
+                      {helmIcon(12)}
+                    </div>
+                  )}
+                  <div style={{
+                    maxWidth: "78%", padding: "8px 12px", borderRadius: 14,
+                    ...(msg.role === "user"
+                      ? { background: "linear-gradient(135deg,#5856d6,#af52de)", color: "#fff", fontSize: 13, lineHeight: 1.5, borderBottomRightRadius: 4 }
+                      : { backgroundColor: "#f5f5f7", borderBottomLeftRadius: 4 }
+                    ),
+                  }}>
+                    {msg.role === "user" ? msg.content : <MarkdownContent text={msg.content} />}
+                  </div>
+                </div>
+                {/* AI 回复元信息：模型 + token + 耗时 */}
+                {msg.role === "assistant" && (msg.model || msg.elapsed) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, paddingLeft: 34, color: "#aeaeb2", fontSize: 10 }}>
+                    {msg.model && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                        </svg>
+                        {msg.model}
+                      </span>
+                    )}
+                    {msg.model && msg.inputTokens !== undefined && msg.inputTokens > 0 && (
+                      <span style={{ opacity: 0.4 }}>·</span>
+                    )}
+                    {msg.inputTokens !== undefined && msg.inputTokens > 0 && (
+                      <span title={`输入 ${msg.inputTokens}（含prompt）+ 输出 ${msg.outputTokens} tokens，双向计费`}>
+                        ↑{msg.inputTokens} ↓{msg.outputTokens} tokens
+                      </span>
+                    )}
+                    {msg.elapsed && (
+                      <>
+                        <span style={{ opacity: 0.4 }}>·</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                          </svg>
+                          {msg.elapsed}s
+                        </span>
+                      </>
+                    )}
                   </div>
                 )}
-                <div style={{
-                  maxWidth: "78%", padding: "8px 12px", borderRadius: 14,
-                  ...(msg.role === "user"
-                    ? { background: "linear-gradient(135deg,#5856d6,#af52de)", color: "#fff", fontSize: 13, lineHeight: 1.5, borderBottomRightRadius: 4 }
-                    : { backgroundColor: "#f5f5f7", borderBottomLeftRadius: 4 }
-                  ),
-                }}>
-                  {msg.role === "user"
-                    ? msg.content
-                    : <MarkdownContent text={msg.content} />
-                  }
-                </div>
               </div>
             ))}
 
             {/* 加载动画 */}
             {loading && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
-                <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, background: "linear-gradient(135deg,#5856d6,#af52de)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2"/>
-                    <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, background: "linear-gradient(135deg,#5856d6,#af52de)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {helmIcon(12)}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 14, borderBottomLeftRadius: 4, backgroundColor: "#f5f5f7" }}>
+                    {/* 跳动点 */}
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      {[0, 1, 2].map(n => (
+                        <span key={n} style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#c5c5ca", display: "block", animation: `wBounce 1.2s ease-in-out ${n * 0.2}s infinite` }} />
+                      ))}
+                    </div>
+                    {/* 分隔线 */}
+                    <span style={{ width: 1, height: 12, backgroundColor: "#d8d8dc", flexShrink: 0 }} />
+                    {/* 状态文字 */}
+                    <span style={{ fontSize: 11, color: "#8e8e93", whiteSpace: "nowrap" }}>正在分析...</span>
+                  </div>
                 </div>
-                <div style={{ padding: "10px 14px", borderRadius: 14, borderBottomLeftRadius: 4, backgroundColor: "#f5f5f7", display: "flex", gap: 5, alignItems: "center" }}>
-                  {[0, 1, 2].map(n => (
-                    <span key={n} style={{
-                      width: 7, height: 7, borderRadius: "50%", backgroundColor: "#c5c5ca", display: "block",
-                      animation: `widgetBounce 1.2s ease-in-out ${n * 0.2}s infinite`,
-                    }} />
-                  ))}
-                  <style>{`@keyframes widgetBounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}`}</style>
+                {/* 模型 + 计时 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, paddingLeft: 34, color: "#aeaeb2", fontSize: 10 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                    </svg>
+                    MiniMax-M2.5
+                  </span>
+                  <span style={{ opacity: 0.4 }}>·</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                    </svg>
+                    <ElapsedTimer startTime={loadingStartTime} />
+                  </span>
                 </div>
               </div>
             )}
