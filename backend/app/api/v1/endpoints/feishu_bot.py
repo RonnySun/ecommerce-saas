@@ -42,7 +42,11 @@ async def feishu_start(
     from app.services import feishu_listener
 
     if feishu_listener.is_running():
-        return {"ok": True, "message": "飞书监听器已在运行中"}
+        # 仅在底层 WS 真连接存活时才判定“已在运行”
+        if feishu_listener.is_ws_alive():
+            return {"ok": True, "message": "飞书监听器已在运行中"}
+        # 状态漂移：running=true 但 WS 已断，先清理再重启
+        feishu_listener.stop_listener()
 
     # 从数据库读取 feishu 配置
     from sqlalchemy import text as sa_text
@@ -75,7 +79,7 @@ async def feishu_start(
         )
 
     feishu_listener.start_listener(app_id, app_secret, feishu_tenant_id)
-    return {"ok": True, "message": f"飞书监听器启动中（App ID: {app_id}，tenant_id: {feishu_tenant_id}）"}
+    return {"ok": True, "message": f"飞书监听器启动中（App ID: {app_id}）"}
 
 
 @router.post("/stop")

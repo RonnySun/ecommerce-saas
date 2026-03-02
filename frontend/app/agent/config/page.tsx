@@ -393,6 +393,7 @@ export default function AgentConfigPage() {
                   <p className="text-xs" style={{ color: "#8e8e93", lineHeight: 1.6 }}>
                     <strong style={{ color: "#3a3a3c" }}>使用步骤：</strong>
                     在上方编辑器中填写 App ID 和 App Secret（来自飞书开放平台），保存后点击「启动监听」。
+                    tenant_id 由系统自动绑定，无需手动填写。
                     启动后在飞书直接给机器人发消息即可，秒算会自动回复数据分析。
                   </p>
                 </div>

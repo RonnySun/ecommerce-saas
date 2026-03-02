@@ -62,14 +62,10 @@ DEFAULTS = {
 App ID: cli_xxxxxxxxxxxxxxxx
 App Secret: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-## 租户绑定
-
-tenant_id: 1
-
 ## 说明
 
 - App ID 和 App Secret 在飞书开放平台 → 凭证与基础信息 中获取
-- tenant_id 填写你的企业 ID（默认为 1）
+- 租户由系统自动绑定，无需手动填写 tenant_id
 - 保存后在下方点击「启动监听」连接飞书
 - 使用 WebSocket 长连接，无需公网 IP，本地即可运行
 """,
