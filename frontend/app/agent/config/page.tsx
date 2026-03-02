@@ -14,7 +14,7 @@ function NavBar({ user, onLogout }: { user: any; onLogout?: () => void }) {
     { label: "财务",    href: "/finance" },
     { label: "店铺",    href: "/stores" },
     { label: "导入数据", href: "/import" },
-    { label: "掌舵",    href: "/agent" },
+    { label: "秒算",    href: "/agent" },
   ]
   return (
     <header className="sticky top-0 z-30"
@@ -156,7 +156,7 @@ export default function AgentConfigPage() {
         {/* 面包屑 + 标题 */}
         <div className="mb-6">
           <div className="flex items-center gap-2 text-sm mb-2" style={{ color: "#8e8e93" }}>
-            <button onClick={() => router.push("/agent")} style={{ color: "#0071e3", cursor: "pointer", background: "none", border: "none", padding: 0, fontSize: 13 }}>掌舵</button>
+            <button onClick={() => router.push("/agent")} style={{ color: "#0071e3", cursor: "pointer", background: "none", border: "none", padding: 0, fontSize: 13 }}>秒算</button>
             <span>/</span>
             <span>配置</span>
           </div>

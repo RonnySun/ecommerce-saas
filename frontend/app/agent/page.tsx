@@ -14,7 +14,7 @@ function NavBar({ user, onLogout }: { user: any; onLogout?: () => void }) {
     { label: "财务",    href: "/finance" },
     { label: "店铺",    href: "/stores" },
     { label: "导入数据", href: "/import" },
-    { label: "掌舵",    href: "/agent" },
+    { label: "秒算",    href: "/agent" },
   ]
   return (
     <header
@@ -104,15 +104,15 @@ function MarkdownContent({ text }: { text: string }) {
     const line = lines[i]
 
     // 空行
-    if (line.trim() === "") { elements.push(<div key={i} style={{ height: 6 }} />); i++; continue }
+    if (line.trim() === "") { elements.push(<div key={elements.length} style={{ height: 6 }} />); i++; continue }
 
     // ## 或 ### 标题
     if (line.startsWith("### ")) {
-      elements.push(<p key={i} className="font-semibold mt-3 mb-1" style={{ color: "#1d1d1f", fontSize: 13 }}>{renderInline(line.slice(4))}</p>)
+      elements.push(<p key={elements.length} className="font-semibold mt-3 mb-1" style={{ color: "#1d1d1f", fontSize: 13 }}>{renderInline(line.slice(4))}</p>)
       i++; continue
     }
     if (line.startsWith("## ")) {
-      elements.push(<p key={i} className="font-bold mt-4 mb-2" style={{ color: "#1d1d1f", fontSize: 14 }}>{renderInline(line.slice(3))}</p>)
+      elements.push(<p key={elements.length} className="font-bold mt-4 mb-2" style={{ color: "#1d1d1f", fontSize: 14 }}>{renderInline(line.slice(3))}</p>)
       i++; continue
     }
 
@@ -125,7 +125,7 @@ function MarkdownContent({ text }: { text: string }) {
       // 过滤分隔行（|---|）
       const rows = tableLines.filter(l => !l.match(/^\s*\|[\s\-:|]+\|\s*$/))
       elements.push(
-        <div key={i} className="overflow-x-auto my-2 rounded-xl" style={{ border: "1px solid #e5e5ea" }}>
+        <div key={elements.length} className="overflow-x-auto my-2 rounded-xl" style={{ border: "1px solid #e5e5ea" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <tbody>
               {rows.map((row, ri) => {
@@ -155,7 +155,7 @@ function MarkdownContent({ text }: { text: string }) {
         items.push(lines[i].replace(/^[-•]\s/, "")); i++
       }
       elements.push(
-        <ul key={i} style={{ paddingLeft: 16, margin: "4px 0" }}>
+        <ul key={elements.length} style={{ paddingLeft: 16, margin: "4px 0" }}>
           {items.map((item, ii) => (
             <li key={ii} style={{ color: "#3a3a3c", fontSize: 13, marginBottom: 3, lineHeight: 1.6 }}>{renderInline(item)}</li>
           ))}
@@ -171,7 +171,7 @@ function MarkdownContent({ text }: { text: string }) {
         items.push(lines[i].replace(/^\d+\.\s/, "")); i++
       }
       elements.push(
-        <ol key={i} style={{ paddingLeft: 20, margin: "4px 0" }}>
+        <ol key={elements.length} style={{ paddingLeft: 20, margin: "4px 0" }}>
           {items.map((item, ii) => (
             <li key={ii} style={{ color: "#3a3a3c", fontSize: 13, marginBottom: 3, lineHeight: 1.6 }}>{renderInline(item)}</li>
           ))}
@@ -182,7 +182,7 @@ function MarkdownContent({ text }: { text: string }) {
 
     // 普通段落
     elements.push(
-      <p key={i} style={{ color: "#3a3a3c", fontSize: 13, lineHeight: 1.7, margin: "2px 0" }}>
+      <p key={elements.length} style={{ color: "#3a3a3c", fontSize: 13, lineHeight: 1.7, margin: "2px 0" }}>
         {renderInline(line)}
       </p>
     )
