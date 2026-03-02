@@ -27,6 +27,7 @@ function NavBar({ user, onLogout }: { user: any; onLogout?: () => void }) {
     { label: "财务",     href: "/finance" },
     { label: "店铺",     href: "/stores" },
     { label: "导入数据", href: "/import" },
+    { label: "掌舵",     href: "/agent" },
   ]
 
   return (

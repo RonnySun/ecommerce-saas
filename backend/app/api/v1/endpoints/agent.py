@@ -347,6 +347,20 @@ async def agent_chat(
     if req.token != BOT_API_TOKEN:
         raise HTTPException(status_code=401, detail="无效的 Bot 令牌")
 
+    # 加载租户 MD 配置，拼接到 System Prompt
+    from sqlalchemy import text as sa_text
+    system_prompt = SYSTEM_PROMPT
+    try:
+        cfg_rows = (await db.execute(
+            sa_text("SELECT file_name, content FROM agent_configs WHERE tenant_id = :tid ORDER BY file_name"),
+            {"tid": req.tenant_id},
+        )).fetchall()
+        if cfg_rows:
+            extras = "\n\n---\n\n".join(f"<!-- {r[0].upper()}.md -->\n{r[1]}" for r in cfg_rows)
+            system_prompt = SYSTEM_PROMPT + "\n\n---\n\n" + extras
+    except Exception:
+        pass  # 配置加载失败时降级到默认 System Prompt
+
     session_id = req.session_id or str(uuid.uuid4())
     client = get_ai_client()
     messages = [{"role": "user", "content": req.message}]
@@ -357,7 +371,7 @@ async def agent_chat(
         response = client.messages.create(
             model="MiniMax-M2.5",
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             tools=TOOLS,
             messages=messages,
         )
