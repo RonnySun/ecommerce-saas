@@ -350,7 +350,7 @@ export default function AgentPage() {
                   <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 0 2h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1 0-2h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2zm-3 9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm6 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" fill="white" />
                 </svg>
               </div>
-              <h2 className="font-bold mb-2" style={{ color: "#1d1d1f", fontSize: 22, letterSpacing: "-0.03em" }}>掌舵</h2>
+              <h2 className="font-bold mb-2" style={{ color: "#1d1d1f", fontSize: 22, letterSpacing: "-0.03em" }}>秒算</h2>
               <p className="text-sm" style={{ color: "#8e8e93" }}>用自然语言查询你的店铺数据，获取专业分析建议</p>
 
               {/* 快捷问题 */}
@@ -447,7 +447,7 @@ export default function AgentPage() {
           </button>
         </div>
         <p className="text-center pb-2" style={{ fontSize: 10, color: "#c5c5ca" }}>
-          掌舵 · 由 MiniMax M2.5 驱动
+          秒算 · 由 MiniMax M2.5 驱动
         </p>
       </div>
     </div>

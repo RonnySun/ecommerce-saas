@@ -67,7 +67,7 @@ const FILES = [
     key: "soul",
     label: "SOUL.md",
     icon: "🧠",
-    desc: "掌舵的行为准则、回答风格、角色定位",
+    desc: "秒算的行为准则、回答风格、角色定位",
     hint: "控制 AI 说话的方式和边界，相当于给它定规矩",
   },
   {
@@ -162,9 +162,9 @@ export default function AgentConfigPage() {
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-bold" style={{ color: "#1d1d1f", fontSize: 26, letterSpacing: "-0.03em" }}>掌舵配置</h1>
+              <h1 className="font-bold" style={{ color: "#1d1d1f", fontSize: 26, letterSpacing: "-0.03em" }}>秒算配置</h1>
               <p className="text-sm mt-1" style={{ color: "#8e8e93" }}>
-                通过 MD 文件定制掌舵的行为、知识和背景，类似 OpenClaw 的 SOUL.md / TOOLS.md
+                通过 MD 文件定制秒算的行为、知识和背景，类似 OpenClaw 的 SOUL.md / TOOLS.md
               </p>
             </div>
             <button onClick={() => router.push("/agent")}
@@ -214,7 +214,7 @@ export default function AgentConfigPage() {
             <div className="rounded-2xl p-4 mt-4" style={{ backgroundColor: "rgba(88,86,214,0.06)", border: "1px solid rgba(88,86,214,0.12)" }}>
               <p className="text-xs font-semibold mb-1" style={{ color: "#5856d6" }}>💡 配置原理</p>
               <p className="text-xs" style={{ color: "#6e6e73", lineHeight: 1.6 }}>
-                每次对话时，掌舵会自动读取这3个文件并合并到 System Prompt，影响 AI 的行为和知识。
+                每次对话时，秒算会自动读取这3个文件并合并到 System Prompt，影响 AI 的行为和知识。
               </p>
             </div>
           </div>
