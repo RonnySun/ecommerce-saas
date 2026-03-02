@@ -333,40 +333,39 @@ SYSTEM_PROMPT = """你是一个专业的电商数据分析助手，服务于同�
 - 控制在300字以内，重点突出"""
 
 
-# ---- 主接口 ----
+# ---- 可复用 Agent 逻辑（HTTP 接口和飞书监听器共用）----
 
-@router.post("/chat", response_model=ChatResponse)
-async def agent_chat(
-    req: ChatRequest,
-    db: AsyncSession = Depends(get_db),
-):
+async def run_agent_logic(
+    message: str,
+    tenant_id: int,
+    db: AsyncSession,
+    session_id: Optional[str] = None,
+) -> ChatResponse:
     """
-    垂直电商 AI Agent 对话接口
-    - 鉴权：与 bot.py 相同的 Bot Token
-    - 模型：MiniMax M2.5（通过 Anthropic 兼容 API 调用）
-    - 工具：get_overview / get_stores / get_finance / get_alert
+    核心 Agent 逻辑，与传输层解耦。
+    供 HTTP /chat 接口和飞书 WebSocket 监听器共同调用。
     """
-    # 鉴权
-    if req.token != BOT_API_TOKEN:
-        raise HTTPException(status_code=401, detail="无效的 Bot 令牌")
-
-    # 加载租户 MD 配置，拼接到 System Prompt
     from sqlalchemy import text as sa_text
+
+    # 加载租户 MD 配置（排除 feishu 文件，它不属于 system prompt）
     system_prompt = SYSTEM_PROMPT
     try:
         cfg_rows = (await db.execute(
-            sa_text("SELECT file_name, content FROM agent_configs WHERE tenant_id = :tid ORDER BY file_name"),
-            {"tid": req.tenant_id},
+            sa_text(
+                "SELECT file_name, content FROM agent_configs "
+                "WHERE tenant_id = :tid AND file_name != 'feishu' ORDER BY file_name"
+            ),
+            {"tid": tenant_id},
         )).fetchall()
         if cfg_rows:
             extras = "\n\n---\n\n".join(f"<!-- {r[0].upper()}.md -->\n{r[1]}" for r in cfg_rows)
             system_prompt = SYSTEM_PROMPT + "\n\n---\n\n" + extras
     except Exception:
-        pass  # 配置加载失败时降级到默认 System Prompt
+        pass
 
-    session_id = req.session_id or str(uuid.uuid4())
+    session_id = session_id or str(uuid.uuid4())
     client = get_ai_client()
-    messages = [{"role": "user", "content": req.message}]
+    messages = [{"role": "user", "content": message}]
     tools_called: List[str] = []
     total_input_tokens  = 0
     total_output_tokens = 0
@@ -382,14 +381,11 @@ async def agent_chat(
             messages=messages,
         )
 
-        # 累计每轮 token 用量
         if hasattr(response, "usage") and response.usage:
             total_input_tokens  += getattr(response.usage, "input_tokens",  0) or 0
             total_output_tokens += getattr(response.usage, "output_tokens", 0) or 0
 
-        # 模型决定直接回答，不调用工具
         if response.stop_reason == "end_turn":
-            # 用 block.type == "text" 精确匹配，避免 MiniMax reasoning 块（thinking）干扰
             reply = next(
                 (block.text for block in response.content if block.type == "text"),
                 "抱歉，暂时无法回答这个问题，请换个方式提问。",
@@ -403,14 +399,13 @@ async def agent_chat(
                 output_tokens=total_output_tokens,
             )
 
-        # 模型要调用工具
         if response.stop_reason == "tool_use":
             messages.append({"role": "assistant", "content": response.content})
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
                     tools_called.append(block.name)
-                    data = await execute_tool(block.name, block.input, req.tenant_id, db)
+                    data = await execute_tool(block.name, block.input, tenant_id, db)
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
@@ -419,10 +414,8 @@ async def agent_chat(
             messages.append({"role": "user", "content": tool_results})
             continue
 
-        # 其他 stop_reason（max_tokens 等）
         break
 
-    # 兜底回答
     return ChatResponse(
         reply="数据已获取，但回答生成超时，请重试。",
         session_id=session_id,
@@ -431,3 +424,21 @@ async def agent_chat(
         input_tokens=total_input_tokens,
         output_tokens=total_output_tokens,
     )
+
+
+# ---- 主接口 ----
+
+@router.post("/chat", response_model=ChatResponse)
+async def agent_chat(
+    req: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    垂直电商 AI Agent 对话接口
+    - 鉴权：与 bot.py 相同的 Bot Token
+    - 模型：MiniMax M2.5（通过 Anthropic 兼容 API 调用）
+    - 工具：get_overview / get_stores / get_finance / get_alert
+    """
+    if req.token != BOT_API_TOKEN:
+        raise HTTPException(status_code=401, detail="无效的 Bot 令牌")
+    return await run_agent_logic(req.message, req.tenant_id, db, req.session_id)

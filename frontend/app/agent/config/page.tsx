@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
 const API = "/api/v1"
@@ -84,6 +84,13 @@ const FILES = [
     desc: "你的公司背景、主营品类、近期活动计划",
     hint: "让 AI 了解你的具体情况，分析更有针对性",
   },
+  {
+    key: "feishu",
+    label: "FEISHU.md",
+    icon: "🔗",
+    desc: "飞书机器人 App ID / App Secret，接入飞书频道",
+    hint: "填写凭证后点击「启动监听」，即可在飞书直接问数据",
+  },
 ]
 
 /* ── 主页面 ───────────────────────────────── */
@@ -96,6 +103,11 @@ export default function AgentConfigPage() {
   const [originals, setOriginals] = useState<Record<string, string>>({})
   const [saving,   setSaving]   = useState<string | null>(null)
   const [saved,    setSaved]    = useState<string | null>(null)
+
+  // 飞书监听器状态
+  const [feishuRunning,  setFeishuRunning]  = useState(false)
+  const [feishuLoading,  setFeishuLoading]  = useState(false)
+  const [feishuMsg,      setFeishuMsg]      = useState("")
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -121,6 +133,22 @@ export default function AgentConfigPage() {
     })
   }, [tenantId])
 
+  // 轮询飞书监听器状态（当飞书 tab 激活时，每 5 秒刷新一次）
+  const pollFeishuStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/feishu/status?token=${BOT_TOKEN}`)
+      const data = await res.json()
+      setFeishuRunning(!!data.running)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (activeTab !== "feishu") return
+    pollFeishuStatus()
+    const t = setInterval(pollFeishuStatus, 5000)
+    return () => clearInterval(t)
+  }, [activeTab, pollFeishuStatus])
+
   const handleLogout = () => {
     localStorage.removeItem("token")
     localStorage.removeItem("user")
@@ -142,6 +170,29 @@ export default function AgentConfigPage() {
       }
     } finally {
       setSaving(null)
+    }
+  }
+
+  const handleFeishuToggle = async () => {
+    setFeishuLoading(true)
+    setFeishuMsg("")
+    try {
+      const action = feishuRunning ? "stop" : "start"
+      const res = await fetch(`${API}/feishu/${action}?tenant_id=${tenantId}&token=${BOT_TOKEN}`, {
+        method: "POST",
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setFeishuMsg(data.message || (feishuRunning ? "已停止" : "启动中…"))
+        // 稍等后刷新状态
+        setTimeout(pollFeishuStatus, 1500)
+      } else {
+        setFeishuMsg(data.detail || "操作失败")
+      }
+    } catch (e: any) {
+      setFeishuMsg("网络错误，请重试")
+    } finally {
+      setFeishuLoading(false)
     }
   }
 
@@ -185,6 +236,8 @@ export default function AgentConfigPage() {
               {FILES.map((f, i) => {
                 const active = activeTab === f.key
                 const dirty = isDirty(f.key)
+                // 飞书 tab 显示运行状态指示点
+                const isFeishu = f.key === "feishu"
                 return (
                   <div key={f.key}
                     onClick={() => setActiveTab(f.key)}
@@ -202,7 +255,12 @@ export default function AgentConfigPage() {
                         <span style={{ fontSize: 16 }}>{f.icon}</span>
                         <span className="text-sm font-semibold" style={{ color: active ? "#5856d6" : "#1d1d1f", fontFamily: "monospace" }}>{f.label}</span>
                       </div>
-                      {dirty && <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "#ff9f0a", flexShrink: 0 }} />}
+                      <div className="flex items-center gap-1">
+                        {isFeishu && (
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: feishuRunning ? "#30d158" : "#aeaeb2", flexShrink: 0 }} />
+                        )}
+                        {dirty && <span style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "#ff9f0a", flexShrink: 0 }} />}
+                      </div>
                     </div>
                     <p className="text-xs mt-1" style={{ color: "#8e8e93", lineHeight: 1.4 }}>{f.desc}</p>
                   </div>
@@ -214,7 +272,7 @@ export default function AgentConfigPage() {
             <div className="rounded-2xl p-4 mt-4" style={{ backgroundColor: "rgba(88,86,214,0.06)", border: "1px solid rgba(88,86,214,0.12)" }}>
               <p className="text-xs font-semibold mb-1" style={{ color: "#5856d6" }}>💡 配置原理</p>
               <p className="text-xs" style={{ color: "#6e6e73", lineHeight: 1.6 }}>
-                每次对话时，秒算会自动读取这3个文件并合并到 System Prompt，影响 AI 的行为和知识。
+                每次对话时，秒算会自动读取 SOUL / SKILLS / CONTEXT 并合并到 System Prompt。FEISHU.md 用于配置飞书机器人凭证。
               </p>
             </div>
           </div>
@@ -277,13 +335,85 @@ export default function AgentConfigPage() {
               </div>
             </div>
 
+            {/* 飞书控制面板（仅飞书 tab 显示）*/}
+            {activeTab === "feishu" && (
+              <div className="rounded-2xl mt-4 overflow-hidden" style={{ backgroundColor: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)" }}>
+                <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid #f2f2f7" }}>
+                  <div className="flex items-center gap-3">
+                    {/* 状态指示灯 */}
+                    <div style={{ position: "relative", width: 10, height: 10 }}>
+                      <span style={{
+                        display: "block", width: 10, height: 10, borderRadius: "50%",
+                        backgroundColor: feishuRunning ? "#30d158" : "#aeaeb2",
+                      }} />
+                      {feishuRunning && (
+                        <span style={{
+                          position: "absolute", top: 0, left: 0,
+                          width: 10, height: 10, borderRadius: "50%",
+                          backgroundColor: "#30d158", opacity: 0.5,
+                          animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite",
+                        }} />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "#1d1d1f" }}>
+                        飞书频道
+                        <span className="ml-2 text-xs font-normal" style={{ color: feishuRunning ? "#30d158" : "#aeaeb2" }}>
+                          {feishuRunning ? "● 监听中" : "○ 未连接"}
+                        </span>
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "#8e8e93" }}>
+                        WebSocket 长连接，无需公网 IP，本地运行即可
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleFeishuToggle}
+                    disabled={feishuLoading}
+                    className="px-5 py-2 rounded-xl text-sm font-semibold"
+                    style={{
+                      background: feishuRunning
+                        ? "linear-gradient(135deg,#ff453a,#ff6961)"
+                        : "linear-gradient(135deg,#30d158,#34c759)",
+                      color: "#fff", border: "none",
+                      cursor: feishuLoading ? "default" : "pointer",
+                      opacity: feishuLoading ? 0.6 : 1,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                    }}
+                  >
+                    {feishuLoading ? "操作中…" : feishuRunning ? "停止监听" : "启动监听"}
+                  </button>
+                </div>
+                {feishuMsg && (
+                  <div className="px-5 py-3" style={{ backgroundColor: "#f9f9fb" }}>
+                    <p className="text-xs" style={{ color: "#6e6e73" }}>{feishuMsg}</p>
+                  </div>
+                )}
+                <div className="px-5 py-3.5">
+                  <p className="text-xs" style={{ color: "#8e8e93", lineHeight: 1.6 }}>
+                    <strong style={{ color: "#3a3a3c" }}>使用步骤：</strong>
+                    在上方编辑器中填写 App ID 和 App Secret（来自飞书开放平台），保存后点击「启动监听」。
+                    启动后在飞书直接给机器人发消息即可，秒算会自动回复数据分析。
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* 底部提示 */}
             <p className="text-xs mt-2" style={{ color: "#aeaeb2" }}>
-              {activeFile.hint} · 支持 Markdown 格式 · 改动实时生效（下次对话开始时加载）
+              {activeFile.hint} · 支持 Markdown 格式
+              {activeTab !== "feishu" && " · 改动实时生效（下次对话开始时加载）"}
             </p>
           </div>
         </div>
       </div>
+
+      {/* ping 动画 */}
+      <style>{`
+        @keyframes ping {
+          75%, 100% { transform: scale(2); opacity: 0; }
+        }
+      `}</style>
     </div>
   )
 }

@@ -9,9 +9,10 @@ GET/PUT /api/v1/agent/config/{file_name}
 
 这些内容会在 agent.py 对话时注入 System Prompt。
 """
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert, update
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -21,7 +22,7 @@ from app.api.v1.endpoints.bot import BOT_API_TOKEN
 router = APIRouter()
 
 # 合法的文件名
-ALLOWED_FILES = {"soul", "skills", "context"}
+ALLOWED_FILES = {"soul", "skills", "context", "feishu"}
 
 # 默认内容（首次使用时展示）
 DEFAULTS = {
@@ -53,6 +54,24 @@ DEFAULTS = {
 ## 季节性规律
 - Q4（10–12月）：双11/双12，GMV 通常是全年高峰
 - Q1（1–3月）：年后淡季，GMV 通常下滑 20–30%
+""",
+    "feishu": """# 秒算 · 飞书机器人配置（FEISHU）
+
+## 飞书机器人凭证
+
+App ID: cli_xxxxxxxxxxxxxxxx
+App Secret: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+## 租户绑定
+
+tenant_id: 1
+
+## 说明
+
+- App ID 和 App Secret 在飞书开放平台 → 凭证与基础信息 中获取
+- tenant_id 填写你的企业 ID（默认为 1）
+- 保存后在下方点击「启动监听」连接飞书
+- 使用 WebSocket 长连接，无需公网 IP，本地即可运行
 """,
     "context": """# 掌舵 · 商家背景（CONTEXT）
 
@@ -124,4 +143,49 @@ async def update_config(
         {"tid": tenant_id, "fname": file_name, "content": body.content, "now": datetime.now()},
     )
     await db.commit()
+
+    # 飞书配置保存后，立即热重载监听器，避免“配置已变更但连接仍是旧凭证”
+    if file_name == "feishu":
+        from app.services import feishu_listener
+
+        cfg = feishu_listener.parse_feishu_config(body.content or "")
+        app_id = (cfg.get("app_id") or "").strip()
+        app_secret = (cfg.get("app_secret") or "").strip()
+        feishu_tenant_id = int(cfg.get("tenant_id", tenant_id))
+
+        valid = (
+            bool(app_id)
+            and bool(app_secret)
+            and not app_id.startswith("cli_xxx")
+            and not app_secret.startswith("xxx")
+        )
+        if valid:
+            try:
+                feishu_listener.stop_listener()
+                time.sleep(0.5)
+                feishu_listener.start_listener(app_id, app_secret, feishu_tenant_id)
+                return {
+                    "ok": True,
+                    "file_name": file_name,
+                    "listener_restarted": True,
+                    "app_id": app_id,
+                    "tenant_id": feishu_tenant_id,
+                }
+            except Exception as e:
+                return {
+                    "ok": True,
+                    "file_name": file_name,
+                    "listener_restarted": False,
+                    "error": f"飞书监听器重启失败: {e}",
+                }
+
+        # 配置无效时停掉监听，避免看起来“运行中”但实际不可用
+        feishu_listener.stop_listener()
+        return {
+            "ok": True,
+            "file_name": file_name,
+            "listener_restarted": False,
+            "error": "飞书配置不完整（App ID/App Secret），监听器已停止",
+        }
+
     return {"ok": True, "file_name": file_name}
