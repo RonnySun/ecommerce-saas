@@ -85,7 +85,7 @@ function MarkdownContent({ text }: { text: string }) {
 
 /* ── 主组件 ─────────────────────────────── */
 export default function ChatWidget() {
-  const [open,      setOpen]      = useState(false)
+  const [open,      setOpen]      = useState(true)
   const [messages,  setMessages]  = useState<{ role: string; content: string }[]>([])
   const [input,     setInput]     = useState("")
   const [loading,   setLoading]   = useState(false)
@@ -150,7 +150,7 @@ export default function ChatWidget() {
           }}
           onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 28px rgba(88,86,214,0.55), 0 1px 6px rgba(0,0,0,0.15)" }}
           onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(88,86,214,0.45), 0 1px 4px rgba(0,0,0,0.12)" }}
-          title="掌舵"
+          title="秒算"
         >
           {/* 舵轮图标 */}
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -209,8 +209,8 @@ export default function ChatWidget() {
                 </svg>
               </div>
               <div>
-                <p style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>掌舵</p>
-                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, lineHeight: 1.2 }}>经营数据分析师</p>
+                <p style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>秒算</p>
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, lineHeight: 1.2 }}>基于openclaw架构</p>
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>

@@ -29,6 +29,7 @@ function NavBar({ user }: { user: any }) {
     { label: "财务",     href: "/finance" },
     { label: "店铺",     href: "/stores" },
     { label: "导入数据", href: "/import" },
+    { label: "掌舵",    href: "/agent" },
   ]
   return (
     <header className="sticky top-0 z-30"
