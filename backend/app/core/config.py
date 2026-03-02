@@ -27,5 +27,6 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        env_ignore_empty = True  # 忽略空字符串环境变量，优先使用 .env 文件
 
 settings = Settings()
