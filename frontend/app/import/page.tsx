@@ -1,6 +1,9 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from "recharts"
 
 const API = "/api/v1"
 
@@ -190,38 +193,70 @@ function MappingTable({ columns, sampleRows, mapping, confidence, systemFields, 
 }
 
 // 导入结果
-function ImportResult({ result, onReset }: { result: any; onReset: () => void }) {
-  const router = useRouter()
+function ImportResult({
+  result,
+  onReset,
+  filename,
+  summary,
+}: {
+  result: any
+  onReset: () => void
+  filename?: string
+  summary?: any
+}) {
   const total = result.success + result.failed + result.skipped
   const successRate = total > 0 ? Math.round((result.success / total) * 100) : 0
+  const successPct = total > 0 ? Math.round((result.success / total) * 100) : 0
+  const skipPct = total > 0 ? Math.round((result.skipped / total) * 100) : 0
+  const failPct = total > 0 ? Math.round((result.failed / total) * 100) : 0
   return (
-    <div className="text-center py-8">
-      <div className="w-16 h-16 rounded-full mx-auto mb-5 flex items-center justify-center"
-        style={{ backgroundColor: result.success > 0 ? "#f0fff4" : "#fff2f1" }}>
-        {result.success > 0
-          ? <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#34c759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          : <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="#ff3b30" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        }
-      </div>
-      <h3 className="text-xl font-semibold mb-1" style={{ color: "#1d1d1f" }}>导入完成</h3>
-      <p className="text-sm mb-8" style={{ color: "#6e6e73" }}>成功率 {successRate}%</p>
-
-      <div className="flex justify-center gap-3 mb-8">
-        {[
-          { label: "成功导入", value: result.success, color: "#34c759", bg: "#f0fff4" },
-          { label: "已跳过", value: result.skipped, color: "#ff9500", bg: "#fff8f0" },
-          { label: "失败", value: result.failed, color: "#ff3b30", bg: "#fff2f1" },
-        ].map(item => (
-          <div key={item.label} className="rounded-2xl p-5 w-28 text-center"
-            style={{ backgroundColor: item.bg }}>
-            <p className="text-3xl font-bold mb-1" style={{ color: item.color }}>{item.value}</p>
-            <p className="text-xs" style={{ color: "#6e6e73" }}>{item.label}</p>
+    <div className="py-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* 左列：文件信息 */}
+        <div className="rounded-2xl p-5" style={{ backgroundColor: "#fafafa", border: "1px solid #f2f2f7" }}>
+          <h3 className="text-lg font-semibold mb-4" style={{ color: "#1d1d1f" }}>导入文件信息</h3>
+          <div className="space-y-2 text-sm">
+            <p style={{ color: "#6e6e73" }}>文件名：<span style={{ color: "#1d1d1f" }}>{filename || "—"}</span></p>
+            <p style={{ color: "#6e6e73" }}>总行数：<span style={{ color: "#1d1d1f" }}>{total}</span></p>
+            <p style={{ color: "#6e6e73" }}>入库成功率：<span style={{ color: "#1d1d1f" }}>{successRate}%</span></p>
+            <p style={{ color: "#8e8e93", fontSize: 12 }}>已跳过 = 重复订单号（防止重复入库）</p>
+            <p style={{ color: "#6e6e73" }}>
+              日期范围：
+              <span style={{ color: "#1d1d1f" }}>
+                {summary?.date_from || "—"} ~ {summary?.date_to || "—"}
+              </span>
+            </p>
+            <p style={{ color: "#6e6e73" }}>
+              总 GMV：<span style={{ color: "#1d1d1f" }}>¥{Number(summary?.total_gmv || 0).toLocaleString()}</span>
+            </p>
           </div>
-        ))}
+        </div>
+
+        {/* 右列：导入数据图形 */}
+        <div className="rounded-2xl p-5" style={{ backgroundColor: "#fafafa", border: "1px solid #f2f2f7" }}>
+          <h3 className="text-lg font-semibold mb-4" style={{ color: "#1d1d1f" }}>导入数据图表</h3>
+          <div className="space-y-3">
+            {[
+              { label: "成功导入", value: result.success, pct: successPct, color: "#34c759" },
+              { label: "已跳过（重复）", value: result.skipped, pct: skipPct, color: "#ff9500" },
+              { label: "失败", value: result.failed, pct: failPct, color: "#ff3b30" },
+            ].map((item) => (
+              <div key={item.label}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span style={{ color: "#6e6e73" }}>{item.label}</span>
+                  <span style={{ color: "#1d1d1f", fontWeight: 600 }}>{item.value} ({item.pct}%)</span>
+                </div>
+                <div className="h-2 rounded-full" style={{ backgroundColor: "#ededf0" }}>
+                  <div className="h-2 rounded-full" style={{ width: `${item.pct}%`, backgroundColor: item.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {result.errors.length > 0 && (
-        <div className="text-left rounded-xl p-4 mb-6 max-w-md mx-auto"
+        <div className="text-left rounded-xl p-4 mb-6"
           style={{ backgroundColor: "#fff2f1", border: "1px solid #ffd5d5" }}>
           <p className="text-xs font-medium mb-2" style={{ color: "#ff3b30" }}>失败明细</p>
           {result.errors.map((e: string, i: number) => (
@@ -231,17 +266,14 @@ function ImportResult({ result, onReset }: { result: any; onReset: () => void })
       )}
 
       <div className="flex gap-3 justify-center">
-        <button onClick={onReset}
+        <button
+          onClick={onReset}
           className="px-5 py-2 rounded-xl text-sm font-medium transition-colors"
           style={{ border: "1px solid #d2d2d7", color: "#1d1d1f" }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#f5f5f7")}
-          onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+          onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+        >
           继续导入
-        </button>
-        <button onClick={() => router.push("/")}
-          className="px-5 py-2 rounded-xl text-sm font-medium"
-          style={{ backgroundColor: "#0071e3", color: "#ffffff" }}>
-          查看看板
         </button>
       </div>
     </div>
@@ -257,6 +289,13 @@ export default function ImportPage() {
   const [analyzeData, setAnalyzeData] = useState<any>(null)
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [importResult, setImportResult] = useState<any>(null)
+  const [history, setHistory] = useState<any>(null)
+  const [historyPage, setHistoryPage] = useState(1)
+  const [selectedBatchId, setSelectedBatchId] = useState<string>("")
+  const [batchCharts, setBatchCharts] = useState<any>(null)
+  const [batchLoading, setBatchLoading] = useState(false)
+  const [pendingDeleteBatchId, setPendingDeleteBatchId] = useState<string>("")
+  const [duplicateConfirmOpen, setDuplicateConfirmOpen] = useState(false)
   const [error, setError] = useState("")
   const [user, setUser] = useState<any>(null)
 
@@ -265,7 +304,63 @@ export default function ImportPage() {
     const u = localStorage.getItem("user")
     if (!token) { router.push("/login"); return }
     if (u) setUser(JSON.parse(u))
+    fetchHistory(undefined, 1)
   }, [])
+
+  const fetchHistory = async (preferredBatchId?: string, targetPage?: number) => {
+    const token = localStorage.getItem("token")
+    if (!token) return
+    const page = targetPage || historyPage || 1
+    try {
+      const res = await fetch(`${API}/import/history?page=${page}&page_size=5`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      const data = await res.json()
+      if (!res.ok) return
+      setHistoryPage(data.current_page || 1)
+      setHistory(data)
+      const items = data.items || []
+      if (!items.length) {
+        setSelectedBatchId("")
+        setBatchCharts(null)
+        return
+      }
+      const picked =
+        items.find((x: any) => x.batch_id === preferredBatchId) ||
+        items[0]
+      if (picked?.batch_id) {
+        loadBatchCharts(picked.batch_id)
+      }
+    } catch {
+      // noop
+    }
+  }
+
+  const loadBatchCharts = async (batchId: string) => {
+    const token = localStorage.getItem("token")
+    if (!token || !batchId) return
+    setBatchLoading(true)
+    setSelectedBatchId(batchId)
+    try {
+      const res = await fetch(`${API}/import/history/${batchId}/charts`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.detail || "批次图表加载失败")
+        setBatchCharts(null)
+        return
+      }
+      setBatchCharts(data)
+    } catch {
+      setError("网络错误，批次图表加载失败")
+      setBatchCharts(null)
+    } finally {
+      setBatchLoading(false)
+    }
+  }
 
   const handleFile = async (file: File) => {
     setCurrentFile(file); setError(""); setStep("analyzing")
@@ -284,7 +379,7 @@ export default function ImportPage() {
     } catch { setError("网络错误，请检查后端服务"); setStep("upload") }
   }
 
-  const handleConfirm = async () => {
+  const submitImport = async () => {
     if (!currentFile || !analyzeData) return
     setStep("importing"); setError("")
     const token = localStorage.getItem("token")
@@ -298,7 +393,49 @@ export default function ImportPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.detail || "导入失败"); setStep("mapping"); return }
       setImportResult(data); setStep("done")
+      await fetchHistory(data.batch_id, 1)
     } catch { setError("网络错误，请重试"); setStep("mapping") }
+  }
+
+  const handleConfirm = async () => {
+    if (analyzeData?.duplicate_risk) {
+      setDuplicateConfirmOpen(true)
+      return
+    }
+    await submitImport()
+  }
+
+  const handleDeleteBatchConfirmed = async (batchId: string) => {
+    if (!batchId) return
+    const token = localStorage.getItem("token")
+    if (!token) return
+    setBatchLoading(true)
+    try {
+      const res = await fetch(`${API}/import/history/${batchId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.detail || "删除失败")
+        return
+      }
+      setPendingDeleteBatchId("")
+      if (selectedBatchId === batchId) {
+        setSelectedBatchId("")
+        setBatchCharts(null)
+      }
+      await fetchHistory()
+    } catch {
+      setError("网络错误，删除失败")
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const handleDeleteHistoryItem = async (batchId: string) => {
+    if (!batchId) return
+    setPendingDeleteBatchId(batchId)
   }
 
   const handleReset = () => {
@@ -319,6 +456,199 @@ export default function ImportPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-semibold" style={{ color: "#1d1d1f", letterSpacing: "-0.02em" }}>导入数据</h1>
           <p className="text-sm mt-1" style={{ color: "#6e6e73" }}>上传任意电商平台订单报表，AI 自动识别字段</p>
+        </div>
+
+        {/* 导入历史面板 */}
+        {history && (
+          <div className="rounded-2xl p-4 mb-6" style={{ backgroundColor: "#fff", border: "1px solid #f2f2f7" }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold" style={{ color: "#1d1d1f" }}>导入历史</p>
+              <button
+                onClick={() => fetchHistory(undefined, historyPage)}
+                className="text-xs px-2.5 py-1 rounded-lg"
+                style={{ border: "1px solid #e5e5ea", color: "#6e6e73", backgroundColor: "#fafafa" }}
+              >
+                刷新
+              </button>
+            </div>
+            {history.reached_limit && (
+              <div className="mb-3 px-3 py-2 rounded-lg text-xs" style={{ backgroundColor: "#fff2f1", color: "#d92d20", border: "1px solid #ffd5d5" }}>
+                历史图表最多保留 20 条，已达上限。请先删除部分历史后再导入新文件。
+              </div>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              {[
+                { label: "已导入文件", value: history.total_files || 0 },
+                { label: "累计行数", value: history.total_rows || 0 },
+                { label: "成功行数", value: history.total_success || 0 },
+                { label: "失败行数", value: history.total_failed || 0 },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl p-3" style={{ backgroundColor: "#f9f9fb", border: "1px solid #f2f2f7" }}>
+                  <p className="text-xs mb-1" style={{ color: "#8e8e93" }}>{item.label}</p>
+                  <p className="text-sm font-semibold" style={{ color: "#1d1d1f" }}>{Number(item.value).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+            {(history.items || []).length > 0 ? (
+              <>
+                <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #f2f2f7" }}>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ backgroundColor: "#fafafa", borderBottom: "1px solid #f2f2f7" }}>
+                        <th className="text-left py-2 px-3" style={{ color: "#6e6e73" }}>时间</th>
+                        <th className="text-left py-2 px-3" style={{ color: "#6e6e73" }}>文件</th>
+                        <th className="text-left py-2 px-3" style={{ color: "#6e6e73" }}>结果</th>
+                        <th className="text-left py-2 px-3" style={{ color: "#6e6e73" }}>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.items.map((item: any, idx: number) => (
+                        <tr key={item.id} style={{ borderBottom: idx < history.items.length - 1 ? "1px solid #f2f2f7" : "none" }}>
+                          <td className="py-2 px-3" style={{ color: "#6e6e73" }}>{item.created_at}</td>
+                          <td className="py-2 px-3" style={{ color: "#1d1d1f" }}>{item.filename}</td>
+                          <td className="py-2 px-3" style={{ color: "#1d1d1f" }}>
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-md font-medium"
+                              style={{
+                                backgroundColor: (item.status === "success" || item.status === "partial") ? "#eaf9ef" : "#fff2f1",
+                                color: (item.status === "success" || item.status === "partial") ? "#1a7f37" : "#d92d20",
+                              }}
+                            >
+                              {(item.status === "success" || item.status === "partial") ? "成功" : "失败"}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => loadBatchCharts(item.batch_id)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-medium"
+                                style={{
+                                  border: "1px solid #d2d2d7",
+                                  color: selectedBatchId === item.batch_id ? "#0071e3" : "#3a3a3c",
+                                  backgroundColor: selectedBatchId === item.batch_id ? "#f0f6ff" : "#fff",
+                                }}
+                              >
+                                查看图表
+                              </button>
+                              <button
+                                onClick={() => handleDeleteHistoryItem(item.batch_id)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-medium"
+                                style={{
+                                  border: "1px solid #ffd5d5",
+                                  color: "#ff3b30",
+                                  backgroundColor: "#fff2f1",
+                                }}
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => fetchHistory(undefined, Math.max(1, history.current_page - 1))}
+                    disabled={history.current_page <= 1}
+                    className="px-2.5 py-1 rounded-lg text-xs"
+                    style={{
+                      border: "1px solid #d2d2d7",
+                      color: history.current_page <= 1 ? "#aeaeb2" : "#3a3a3c",
+                      backgroundColor: "#fff",
+                    }}
+                  >
+                    上一页
+                  </button>
+                  <span className="text-xs" style={{ color: "#6e6e73" }}>
+                    第 {history.current_page} / {history.total_pages} 页
+                  </span>
+                  <button
+                    onClick={() => fetchHistory(undefined, Math.min(history.total_pages, history.current_page + 1))}
+                    disabled={history.current_page >= history.total_pages}
+                    className="px-2.5 py-1 rounded-lg text-xs"
+                    style={{
+                      border: "1px solid #d2d2d7",
+                      color: history.current_page >= history.total_pages ? "#aeaeb2" : "#3a3a3c",
+                      backgroundColor: "#fff",
+                    }}
+                  >
+                    下一页
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs" style={{ color: "#8e8e93" }}>还没有导入记录</p>
+            )}
+          </div>
+        )}
+
+        {/* 批次图表分析 */}
+        <div className="rounded-2xl p-4 mb-6" style={{ backgroundColor: "#fff", border: "1px solid #f2f2f7" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "#1d1d1f" }}>
+                导入批次图表分析
+              </p>
+                <p className="text-xs" style={{ color: "#8e8e93" }}>
+                  {batchCharts?.filename || "加载中..."}
+                </p>
+              </div>
+            </div>
+
+            {batchLoading ? (
+              <p className="text-sm" style={{ color: "#6e6e73" }}>正在加载图表...</p>
+            ) : batchCharts ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  {[
+                    { label: "订单数", value: batchCharts?.summary?.orders || 0 },
+                    { label: "GMV", value: `¥${Number(batchCharts?.summary?.gmv || 0).toLocaleString()}` },
+                    { label: "广告费", value: `¥${Number(batchCharts?.summary?.ad_cost || 0).toLocaleString()}` },
+                    { label: "净利润", value: `¥${Number(batchCharts?.summary?.net_profit || 0).toLocaleString()}` },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-xl p-3" style={{ backgroundColor: "#f9f9fb", border: "1px solid #f2f2f7" }}>
+                      <p className="text-xs mb-1" style={{ color: "#8e8e93" }}>{item.label}</p>
+                      <p className="text-sm font-semibold" style={{ color: "#1d1d1f" }}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl p-3" style={{ border: "1px solid #f2f2f7" }}>
+                    <p className="text-xs font-medium mb-2" style={{ color: "#6e6e73" }}>按日期趋势（GMV/净利润）</p>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <AreaChart data={batchCharts?.trend || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f2f2f7" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#8e8e93" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: "#8e8e93" }} axisLine={false} tickLine={false} />
+                        <Tooltip />
+                        <Area type="monotone" dataKey="gmv" stroke="#0071e3" fill="#dfefff" name="GMV" />
+                        <Area type="monotone" dataKey="net_profit" stroke="#34c759" fill="#e5f9ec" name="净利润" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="rounded-xl p-3" style={{ border: "1px solid #f2f2f7" }}>
+                    <p className="text-xs font-medium mb-2" style={{ color: "#6e6e73" }}>店铺贡献（GMV）</p>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={batchCharts?.stores || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f2f2f7" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#8e8e93" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: "#8e8e93" }} axisLine={false} tickLine={false} />
+                        <Tooltip />
+                        <Bar dataKey="gmv" fill="#0071e3" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl px-4 py-10 text-center" style={{ border: "1px dashed #d2d2d7", color: "#8e8e93" }}>
+                暂无图表数据。请先导入文件，或在上方历史记录点击“查看图表”。
+              </div>
+            )}
         </div>
 
         {/* 步骤指示器 */}
@@ -376,6 +706,24 @@ export default function ImportPage() {
                   <div>
                     <p className="text-sm font-medium" style={{ color: "#1d1d1f" }}>{currentFile?.name}</p>
                     <p className="text-xs mt-0.5" style={{ color: "#6e6e73" }}>共 {analyzeData.total_rows} 行数据</p>
+                    {(analyzeData.model || analyzeData.input_tokens > 0) && (
+                      <div className="flex items-center gap-2 mt-1.5" style={{ color: "#aeaeb2", fontSize: 11 }}>
+                        {analyzeData.model && (
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                            </svg>
+                            {analyzeData.model}
+                          </span>
+                        )}
+                        {analyzeData.model && analyzeData.input_tokens > 0 && <span style={{ opacity: 0.4 }}>·</span>}
+                        {analyzeData.input_tokens > 0 && (
+                          <span title={`输入 ${analyzeData.input_tokens} + 输出 ${analyzeData.output_tokens} tokens`}>
+                            ↑{analyzeData.input_tokens} ↓{analyzeData.output_tokens} tokens
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {analyzeData.tips && (
@@ -389,6 +737,33 @@ export default function ImportPage() {
                     </span>
                   </div>
                 </div>
+
+                {analyzeData.preview_summary && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                    {[
+                      { label: "总行数", value: `${analyzeData.preview_summary.total_rows || 0}` },
+                      { label: "店铺数", value: `${analyzeData.preview_summary.store_count || 0}` },
+                      { label: "总 GMV", value: `¥${Number(analyzeData.preview_summary.total_gmv || 0).toLocaleString()}` },
+                      { label: "预估净利润", value: `¥${Number(analyzeData.preview_summary.total_net_profit || 0).toLocaleString()}` },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl p-3" style={{ backgroundColor: "#f9f9fb", border: "1px solid #f2f2f7" }}>
+                        <p className="text-xs mb-1" style={{ color: "#8e8e93" }}>{item.label}</p>
+                        <p className="text-sm font-semibold" style={{ color: "#1d1d1f" }}>{item.value}</p>
+                      </div>
+                    ))}
+                    <div className="col-span-2 md:col-span-4 rounded-xl p-3" style={{ backgroundColor: "#f9f9fb", border: "1px solid #f2f2f7" }}>
+                      <p className="text-xs" style={{ color: "#8e8e93" }}>
+                        日期范围：{analyzeData.preview_summary.date_from || "—"} ~ {analyzeData.preview_summary.date_to || "—"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {analyzeData.chart_limit_reached && (
+                  <div className="mb-4 px-3 py-2 rounded-lg text-xs" style={{ backgroundColor: "#fff2f1", color: "#d92d20", border: "1px solid #ffd5d5" }}>
+                    {analyzeData.chart_limit_message || "历史图表已达上限，请先删除部分历史后再导入。"}
+                  </div>
+                )}
 
                 <MappingTable
                   columns={analyzeData.columns}
@@ -413,8 +788,13 @@ export default function ImportPage() {
                       不需要的列设置为「忽略此列」即可
                     </p>
                     <button onClick={handleConfirm}
+                      disabled={Boolean(analyzeData.chart_limit_reached)}
                       className="px-5 py-2 rounded-xl text-sm font-medium"
-                      style={{ backgroundColor: "#0071e3", color: "#ffffff" }}>
+                      style={{
+                        backgroundColor: analyzeData.chart_limit_reached ? "#c7c7cc" : "#0071e3",
+                        color: "#ffffff",
+                        cursor: analyzeData.chart_limit_reached ? "not-allowed" : "pointer",
+                      }}>
                       导入 {analyzeData.total_rows} 条数据
                     </button>
                   </div>
@@ -434,7 +814,12 @@ export default function ImportPage() {
             )}
 
             {step === "done" && importResult && (
-              <ImportResult result={importResult} onReset={handleReset} />
+              <ImportResult
+                result={importResult}
+                onReset={handleReset}
+                filename={currentFile?.name}
+                summary={analyzeData?.preview_summary}
+              />
             )}
           </div>
         </div>
@@ -456,6 +841,63 @@ export default function ImportPage() {
           </div>
         )}
       </div>
+
+      {pendingDeleteBatchId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: "rgba(0,0,0,0.35)" }}>
+          <div className="w-full max-w-md rounded-2xl p-5" style={{ backgroundColor: "#fff", border: "1px solid #f2f2f7" }}>
+            <p className="text-base font-semibold mb-2" style={{ color: "#1d1d1f" }}>确认删除</p>
+            <p className="text-sm mb-5" style={{ color: "#6e6e73" }}>
+              确认删除这条导入历史及对应入库数据吗？此操作不可恢复。
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setPendingDeleteBatchId("")}
+                className="px-4 py-2 rounded-xl text-sm"
+                style={{ border: "1px solid #d2d2d7", color: "#3a3a3c", backgroundColor: "#fff" }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handleDeleteBatchConfirmed(pendingDeleteBatchId)}
+                className="px-4 py-2 rounded-xl text-sm font-medium"
+                style={{ border: "1px solid #ffd5d5", color: "#ff3b30", backgroundColor: "#fff2f1" }}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {duplicateConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ backgroundColor: "rgba(0,0,0,0.35)" }}>
+          <div className="w-full max-w-md rounded-2xl p-5" style={{ backgroundColor: "#fff", border: "1px solid #f2f2f7" }}>
+            <p className="text-base font-semibold mb-2" style={{ color: "#1d1d1f" }}>检测到疑似重复导入</p>
+            <p className="text-sm mb-5" style={{ color: "#6e6e73" }}>
+              {analyzeData?.duplicate_warning || "该文件可能与历史导入重复，继续导入可能不会新增入库数据。"}
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDuplicateConfirmOpen(false)}
+                className="px-4 py-2 rounded-xl text-sm"
+                style={{ border: "1px solid #d2d2d7", color: "#3a3a3c", backgroundColor: "#fff" }}
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  setDuplicateConfirmOpen(false)
+                  await submitImport()
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-medium"
+                style={{ backgroundColor: "#0071e3", color: "#fff" }}
+              >
+                继续导入
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

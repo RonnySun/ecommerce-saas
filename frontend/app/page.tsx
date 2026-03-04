@@ -237,29 +237,45 @@ export default function Dashboard() {
   const [overview, setOverview] = useState<any>(null)
   const [trend,    setTrend]    = useState<any[]>([])
   const [stores,   setStores]   = useState<any[]>([])
+  const [storeOptions, setStoreOptions] = useState<any[]>([])
+  const [selectedStoreId, setSelectedStoreId] = useState(0)
   const [user,     setUser]     = useState<any>(null)
   const [loading,  setLoading]  = useState(true)
   const [activeTab, setActiveTab] = useState<"trend" | "stores">("trend")
 
-  useEffect(() => {
+  const fetchData = async (storeId: number) => {
     const token = localStorage.getItem("token")
     const u     = localStorage.getItem("user")
     if (!token) { router.push("/login"); return }
     if (u) setUser(JSON.parse(u))
     const tenantId = JSON.parse(u || "{}").tenant_id || 1
     const headers  = { Authorization: `Bearer ${token}` }
-    Promise.all([
-      fetch(`${API}/stats/overview?tenant_id=${tenantId}&days=7`, { headers }).then(r => r.json()),
-      fetch(`${API}/stats/trend?tenant_id=${tenantId}&days=7`,    { headers }).then(r => r.json()),
-      fetch(`${API}/stats/stores?tenant_id=${tenantId}&days=1`,   { headers }).then(r => r.json()),
-    ]).then(([ov, tr, st]) => {
+    const storeQ = storeId > 0 ? `&store_id=${storeId}` : ""
+    try {
+      const [ov, tr, st, sl] = await Promise.all([
+        fetch(`${API}/stats/overview?tenant_id=${tenantId}&days=7${storeQ}`, { headers }).then(r => r.json()),
+        fetch(`${API}/stats/trend?tenant_id=${tenantId}&days=7${storeQ}`,    { headers }).then(r => r.json()),
+        fetch(`${API}/stats/stores?tenant_id=${tenantId}&days=1${storeQ}`,   { headers }).then(r => r.json()),
+        fetch(`${API}/stores`, { headers }).then(r => r.json()),
+      ])
       if (ov.detail) { router.push("/login"); return }
       setOverview(ov)
       setTrend(tr.map((d: any) => ({ ...d, date: d.date.slice(5) })))
       setStores(st)
+      setStoreOptions(Array.isArray(sl) ? sl.filter((s: any) => s.is_active !== false) : [])
       setLoading(false)
-    }).catch(() => router.push("/login"))
+    } catch {
+      router.push("/login")
+    }
+  }
+
+  useEffect(() => {
+    fetchData(selectedStoreId)
   }, [])
+
+  useEffect(() => {
+    if (!loading) fetchData(selectedStoreId)
+  }, [selectedStoreId])
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -328,6 +344,19 @@ export default function Dashboard() {
             经营概览
           </h1>
           <p className="text-sm mt-1.5" style={{ color: "#8e8e93" }}>近 7 天核心指标一览</p>
+          <div className="mt-3">
+            <select
+              value={selectedStoreId}
+              onChange={e => setSelectedStoreId(Number(e.target.value))}
+              className="text-sm rounded-xl px-3 py-2 outline-none"
+              style={{ border: "1px solid #e5e5ea", backgroundColor: "#fff", color: "#1d1d1f" }}
+            >
+              <option value={0}>全部店铺</option>
+              {storeOptions.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* 指标卡 */}

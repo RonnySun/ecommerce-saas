@@ -20,6 +20,7 @@ class Order(Base):
     platform_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)  # 平台佣金
     net_profit: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)    # 净利润
     order_date: Mapped[DateTime] = mapped_column(DateTime)
+    import_batch_id: Mapped[str] = mapped_column(String(64), nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
     
     # 关联

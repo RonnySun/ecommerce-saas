@@ -3,7 +3,7 @@
 POST /api/v1/agent/chat
 
 架构说明：
-  用户提问 → MiniMax M2.5（Anthropic 兼容 API）→ tool_use 调用数据查询 → 自然语言回答
+  用户提问 → OpenAI SDK（兼容网关）→ tool_calls 调用数据查询 → 自然语言回答
   工具与 bot.py 对应的4个接口数据完全一致，但响应由 AI 组织成自然语言。
 """
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,12 +13,13 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
-import anthropic
+import json
+from openai import OpenAI
 
 from app.db.base import get_db
 from app.models import Store, DailyStat, Tenant
-from app.core.config import settings
 from app.api.v1.endpoints.bot import BOT_API_TOKEN
+from app.services.model_config import resolve_model_runtime_config
 
 router = APIRouter()
 
@@ -34,20 +35,33 @@ class ChatResponse(BaseModel):
     reply: str
     session_id: str
     tools_called: List[str] = []
-    model: str = "MiniMax-M2.5"
+    model: str = "minimax/MiniMax-M2.5"
     input_tokens: int = 0
     output_tokens: int = 0
 
 
-# ---- MiniMax 客户端 ----
+# ---- AI 客户端（按租户模型配置动态加载） ----
 
-def get_ai_client() -> anthropic.Anthropic:
-    if not settings.ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=500, detail="AI 服务未配置，请设置 ANTHROPIC_API_KEY")
-    return anthropic.Anthropic(
-        api_key=settings.ANTHROPIC_API_KEY,
-        base_url=settings.MINIMAX_BASE_URL,
-    )
+async def get_ai_client(
+    db: AsyncSession,
+    tenant_id: int,
+) -> tuple[OpenAI, str, str]:
+    runtime_cfg = await resolve_model_runtime_config(db, tenant_id)
+    provider = runtime_cfg.get("provider", "")
+    model_name = runtime_cfg.get("model", "")
+    api_key = runtime_cfg.get("api_key", "")
+    base_url = runtime_cfg.get("base_url", "")
+
+    if not api_key:
+        raise HTTPException(status_code=500, detail=f"{provider} 未配置 API Key，请先到「秒算配置-模型配置」保存")
+    if not base_url:
+        raise HTTPException(status_code=500, detail=f"{provider} 未配置 Base URL，请先到「秒算配置-模型配置」保存")
+    if not model_name:
+        raise HTTPException(status_code=500, detail=f"{provider} 未配置模型名，请先到「秒算配置-模型配置」保存")
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    model_label = f"{provider}/{model_name}"
+    return client, model_name, model_label
 
 
 # ---- 工具定义（告诉 AI 有哪些数据可以查）----
@@ -116,6 +130,18 @@ TOOLS = [
             "required": [],
         },
     },
+]
+
+OPENAI_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": t["input_schema"],
+        },
+    }
+    for t in TOOLS
 ]
 
 
@@ -347,13 +373,13 @@ async def run_agent_logic(
     """
     from sqlalchemy import text as sa_text
 
-    # 加载租户 MD 配置（排除 feishu 文件，它不属于 system prompt）
+    # 加载租户 MD 配置（排除通信渠道配置，它不属于 system prompt）
     system_prompt = SYSTEM_PROMPT
     try:
         cfg_rows = (await db.execute(
             sa_text(
                 "SELECT file_name, content FROM agent_configs "
-                "WHERE tenant_id = :tid AND file_name != 'feishu' ORDER BY file_name"
+                "WHERE tenant_id = :tid AND file_name NOT IN ('feishu', 'channel', 'model') ORDER BY file_name"
             ),
             {"tid": tenant_id},
         )).fetchall()
@@ -364,63 +390,86 @@ async def run_agent_logic(
         pass
 
     session_id = session_id or str(uuid.uuid4())
-    client = get_ai_client()
-    messages = [{"role": "user", "content": message}]
+    client, model_name, model_label = await get_ai_client(db, tenant_id)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": message},
+    ]
     tools_called: List[str] = []
     total_input_tokens  = 0
     total_output_tokens = 0
-    MODEL_NAME = "MiniMax-M2.5"
 
     # Agentic loop（最多 5 轮工具调用）
     for _ in range(5):
-        response = client.messages.create(
-            model=MODEL_NAME,
+        response = client.chat.completions.create(
+            model=model_name,
             max_tokens=1024,
-            system=system_prompt,
-            tools=TOOLS,
+            tools=OPENAI_TOOLS,
+            tool_choice="auto",
             messages=messages,
         )
 
-        if hasattr(response, "usage") and response.usage:
-            total_input_tokens  += getattr(response.usage, "input_tokens",  0) or 0
-            total_output_tokens += getattr(response.usage, "output_tokens", 0) or 0
+        if response.usage:
+            total_input_tokens  += getattr(response.usage, "prompt_tokens", 0) or 0
+            total_output_tokens += getattr(response.usage, "completion_tokens", 0) or 0
 
-        if response.stop_reason == "end_turn":
-            reply = next(
-                (block.text for block in response.content if block.type == "text"),
-                "抱歉，暂时无法回答这个问题，请换个方式提问。",
+        choice = response.choices[0]
+        assistant_msg = choice.message
+
+        if assistant_msg.tool_calls:
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": assistant_msg.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in assistant_msg.tool_calls
+                    ],
+                }
             )
+
+            for tc in assistant_msg.tool_calls:
+                tool_name = tc.function.name
+                tools_called.append(tool_name)
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                    if not isinstance(args, dict):
+                        args = {}
+                except Exception:
+                    args = {}
+                result = await execute_tool(tool_name, args, tenant_id, db)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result,
+                    }
+                )
+            continue
+
+        reply = assistant_msg.content or "抱歉，暂时无法回答这个问题，请换个方式提问。"
+        if reply.strip():
             return ChatResponse(
                 reply=reply,
                 session_id=session_id,
                 tools_called=tools_called,
-                model=MODEL_NAME,
+                model=model_label,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
             )
-
-        if response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    tools_called.append(block.name)
-                    data = await execute_tool(block.name, block.input, tenant_id, db)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": data,
-                    })
-            messages.append({"role": "user", "content": tool_results})
-            continue
-
-        break
 
     return ChatResponse(
         reply="数据已获取，但回答生成超时，请重试。",
         session_id=session_id,
         tools_called=tools_called,
-        model=MODEL_NAME,
+        model=model_label,
         input_tokens=total_input_tokens,
         output_tokens=total_output_tokens,
     )
@@ -436,7 +485,7 @@ async def agent_chat(
     """
     垂直电商 AI Agent 对话接口
     - 鉴权：与 bot.py 相同的 Bot Token
-    - 模型：MiniMax M2.5（通过 Anthropic 兼容 API 调用）
+    - 模型：通过 OpenAI SDK + 兼容网关调用
     - 工具：get_overview / get_stores / get_finance / get_alert
     """
     if req.token != BOT_API_TOKEN:

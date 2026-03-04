@@ -18,9 +18,13 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24小时
     
-    # MiniMax API（Anthropic 兼容）
+    # OpenAI SDK 默认配置（用于导入模块的兜底调用）
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: str = "https://api.minimaxi.com/v1"
+    OPENAI_MODEL: str = "MiniMax-M2.5"
+    # 兼容旧环境变量，避免本地 .env 启动失败
     ANTHROPIC_API_KEY: Optional[str] = None
-    MINIMAX_BASE_URL: str = "https://api.minimaxi.com/anthropic"
+    MINIMAX_BASE_URL: Optional[str] = None
 
     # OpenClaw
     OPENCLAW_API_URL: str = "http://127.0.0.1:18789"

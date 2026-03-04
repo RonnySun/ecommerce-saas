@@ -120,19 +120,25 @@ export default function FinancePage() {
   const [summary, setSummary] = useState<any>(null)
   const [roi,     setRoi]     = useState<any[]>([])
   const [trend,   setTrend]   = useState<any[]>([])
+  const [storeOptions, setStoreOptions] = useState<any[]>([])
+  const [selectedStoreId, setSelectedStoreId] = useState(0)
   const [days,    setDays]    = useState(30)
   const [user,    setUser]    = useState<any>(null)
   const [activeTab, setActiveTab] = useState<"breakdown" | "roi" | "trend">("breakdown")
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState("")
+  const [exportMsgType, setExportMsgType] = useState<"success" | "error">("success")
 
-  const fetchData = async (d: number) => {
+  const fetchData = async (d: number, storeId: number) => {
     const token = localStorage.getItem("token")
     if (!token) { router.push("/login"); return }
     const headers = { Authorization: `Bearer ${token}` }
+    const storeQ = storeId > 0 ? `&store_id=${storeId}` : ""
     try {
       const [s, r, t] = await Promise.all([
-        fetch(`${API}/finance/summary?days=${d}`,       { headers }).then(res => res.json()),
-        fetch(`${API}/finance/roi-analysis?days=${d}`,  { headers }).then(res => res.json()),
-        fetch(`${API}/finance/profit-trend?days=${d}`,  { headers }).then(res => res.json()),
+        fetch(`${API}/finance/summary?days=${d}${storeQ}`,       { headers }).then(res => res.json()),
+        fetch(`${API}/finance/roi-analysis?days=${d}${storeQ}`,  { headers }).then(res => res.json()),
+        fetch(`${API}/finance/profit-trend?days=${d}${storeQ}`,  { headers }).then(res => res.json()),
       ])
       if (s.detail === "登录已过期，请重新登录") { router.push("/login"); return }
       setSummary(s); setRoi(r)
@@ -140,23 +146,65 @@ export default function FinancePage() {
     } catch { router.push("/login") }
   }
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const token = localStorage.getItem("token")
-    fetch(`${API}/export/excel?days=${days}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.blob())
-      .then(blob => {
-        const a = document.createElement("a")
-        a.href = URL.createObjectURL(blob)
-        a.download = `订单数据_近${days}天.xlsx`
-        a.click()
-      })
+    if (!token) {
+      router.push("/login")
+      return
+    }
+    setExporting(true)
+    setExportMsg("")
+    try {
+      const storeQ = selectedStoreId > 0 ? `&store_id=${selectedStoreId}` : ""
+      const res = await fetch(`${API}/export/excel?days=${days}${storeQ}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) {
+        let msg = "导出失败，请稍后重试"
+        const contentType = res.headers.get("content-type") || ""
+        if (contentType.includes("application/json")) {
+          const data = await res.json().catch(() => null)
+          msg = data?.detail || msg
+        } else {
+          const text = await res.text().catch(() => "")
+          if (text && text !== "Internal Server Error") {
+            msg = text
+          }
+        }
+        setExportMsgType("error")
+        setExportMsg(msg)
+        return
+      }
+      const blob = await res.blob()
+      const a = document.createElement("a")
+      a.href = URL.createObjectURL(blob)
+      a.download = `订单数据_近${days}天.xlsx`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      setExportMsgType("success")
+      setExportMsg("导出成功，文件已开始下载")
+    } catch {
+      setExportMsgType("error")
+      setExportMsg("导出失败：网络错误，请检查后端服务")
+    } finally {
+      setExporting(false)
+    }
   }
 
   useEffect(() => {
     const u = localStorage.getItem("user")
+    const token = localStorage.getItem("token")
     if (u) setUser(JSON.parse(u))
-    fetchData(days)
+    if (token) {
+      fetch(`${API}/stores`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(data => setStoreOptions(Array.isArray(data) ? data.filter((s: any) => s.is_active !== false) : []))
+        .catch(() => {})
+    }
+    fetchData(days, selectedStoreId)
   }, [])
+
+  useEffect(() => {
+    if (summary) fetchData(days, selectedStoreId)
+  }, [selectedStoreId])
 
   /* 加载态 */
   if (!summary) return (
@@ -210,15 +258,30 @@ export default function FinancePage() {
               财务分析
             </h1>
             <p className="text-sm mt-1.5" style={{ color: "#8e8e93" }}>近 {days} 天收支概况</p>
+            <div className="mt-3">
+              <select
+                value={selectedStoreId}
+                onChange={e => setSelectedStoreId(Number(e.target.value))}
+                className="text-sm rounded-xl px-3 py-2 outline-none"
+                style={{ border: "1px solid #e5e5ea", backgroundColor: "#fff", color: "#1d1d1f" }}
+              >
+                <option value={0}>全部店铺</option>
+                {storeOptions.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {/* 导出按钮 */}
             <button
               onClick={handleExport}
+              disabled={exporting}
               className="px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2"
               style={{ border: "1px solid #e5e5ea", color: "#3a3a3c", backgroundColor: "#fff",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)", opacity: exporting ? 0.6 : 1, cursor: exporting ? "default" : "pointer" }}
               onMouseEnter={e => {
+                if (exporting) return
                 e.currentTarget.style.backgroundColor = "#f5f5f7"
                 e.currentTarget.style.borderColor = "#c5c5ca"
                 e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.10)"
@@ -233,7 +296,7 @@ export default function FinancePage() {
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"
                   stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              导出 Excel
+              {exporting ? "导出中..." : "导出 Excel"}
             </button>
 
             {/* 时间选择器 */}
@@ -241,7 +304,7 @@ export default function FinancePage() {
               {[7, 30, 60, 90].map(d => (
                 <button
                   key={d}
-                  onClick={() => { setDays(d); fetchData(d) }}
+                  onClick={() => { setDays(d); fetchData(d, selectedStoreId) }}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium"
                   style={{
                     backgroundColor: days === d ? "#fff" : "transparent",
@@ -256,6 +319,19 @@ export default function FinancePage() {
             </div>
           </div>
         </div>
+
+        {exportMsg && (
+          <div
+            className="rounded-xl px-4 py-3 mb-5 text-sm"
+            style={{
+              backgroundColor: exportMsgType === "error" ? "#fff2f1" : "#edfaf2",
+              color: exportMsgType === "error" ? "#c7372f" : "#1f7a3f",
+              border: exportMsgType === "error" ? "1px solid #ffd5d5" : "1px solid #bfe8c9",
+            }}
+          >
+            {exportMsg}
+          </div>
+        )}
 
         {/* 指标卡 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

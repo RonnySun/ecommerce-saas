@@ -276,7 +276,7 @@ function AiBubble({ content, model, inputTokens, outputTokens, elapsed }: {
   )
 }
 
-function LoadingBubble({ startTime }: { startTime: number }) {
+function LoadingBubble({ startTime, model }: { startTime: number; model?: string }) {
   const [elapsed, setElapsed] = useState(0)
 
   useEffect(() => {
@@ -323,7 +323,7 @@ function LoadingBubble({ startTime }: { startTime: number }) {
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
             </svg>
-            MiniMax-M2.5
+            {model || "当前模型"}
           </span>
           <span style={{ opacity: 0.4 }}>·</span>
           <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -351,6 +351,7 @@ export default function AgentPage() {
   const [loading,          setLoading]          = useState(false)
   const [loadingStartTime, setLoadingStartTime] = useState<number>(0)
   const [sessionId,        setSessionId]        = useState<string | null>(null)
+  const [currentModelLabel, setCurrentModelLabel] = useState("当前模型")
   const messagesEndRef  = useRef<HTMLDivElement>(null)
   const textareaRef     = useRef<HTMLTextAreaElement>(null)
 
@@ -364,6 +365,22 @@ export default function AgentPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, loading])
+
+  useEffect(() => {
+    if (!user?.tenant_id) return
+    ;(async () => {
+      try {
+        const res = await fetch(`${API}/agent/model?tenant_id=${user.tenant_id}&token=${BOT_TOKEN}`)
+        const data = await res.json()
+        if (!res.ok || !data?.config) return
+        const provider = data.config.active_provider
+        const model = data.config.providers?.[provider]?.model
+        if (model) setCurrentModelLabel(`${provider}/${model}`)
+      } catch {
+        // noop
+      }
+    })()
+  }, [user?.tenant_id])
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -443,7 +460,7 @@ export default function AgentPage() {
               </div>
               <h2 className="font-bold mb-2" style={{ color: "#1d1d1f", fontSize: 22, letterSpacing: "-0.03em" }}>秒算</h2>
               <p className="text-sm" style={{ color: "#8e8e93" }}>用自然语言查询你的店铺数据，获取专业分析建议</p>
-              <p className="text-xs mt-1" style={{ color: "#c5c5ca" }}>MiniMax-M2.5 · 基于openclaw架构</p>
+              <p className="text-xs mt-1" style={{ color: "#c5c5ca" }}>{currentModelLabel} · 基于 OpenAI SDK 架构</p>
 
               {/* 快捷问题 */}
               <div className="grid grid-cols-2 gap-3 mt-8 text-left">
@@ -474,7 +491,7 @@ export default function AgentPage() {
               : <AiBubble   key={idx} content={msg.content} model={msg.model} inputTokens={msg.inputTokens} outputTokens={msg.outputTokens} elapsed={msg.elapsed} />
           )}
 
-          {loading && <LoadingBubble startTime={loadingStartTime} />}
+          {loading && <LoadingBubble startTime={loadingStartTime} model={currentModelLabel} />}
           <div ref={messagesEndRef} />
         </div>
       </div>

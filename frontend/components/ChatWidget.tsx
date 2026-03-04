@@ -111,6 +111,7 @@ export default function ChatWidget() {
   const [loadingStartTime, setLoadingStartTime] = useState<number>(0)
   const [sessionId,        setSessionId]        = useState<string | null>(null)
   const [tenantId,         setTenantId]         = useState(1)
+  const [currentModelLabel, setCurrentModelLabel] = useState("当前模型")
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
 
@@ -128,6 +129,21 @@ export default function ChatWidget() {
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 100)
   }, [open])
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const res = await fetch(`${API}/agent/model?tenant_id=${tenantId}&token=${BOT_TOKEN}`)
+        const data = await res.json()
+        if (!res.ok || !data?.config) return
+        const provider = data.config.active_provider
+        const model = data.config.providers?.[provider]?.model
+        if (model) setCurrentModelLabel(`${provider}/${model}`)
+      } catch {
+        // noop
+      }
+    })()
+  }, [tenantId])
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return
@@ -231,7 +247,7 @@ export default function ChatWidget() {
               </div>
               <div>
                 <p style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>秒算</p>
-                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, lineHeight: 1.2 }}>基于openclaw架构</p>
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, lineHeight: 1.2 }}>{currentModelLabel}</p>
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -352,7 +368,7 @@ export default function ChatWidget() {
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
                     </svg>
-                    MiniMax-M2.5
+                    {currentModelLabel}
                   </span>
                   <span style={{ opacity: 0.4 }}>·</span>
                   <span style={{ display: "flex", alignItems: "center", gap: 2 }}>

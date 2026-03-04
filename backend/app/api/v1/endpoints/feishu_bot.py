@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import get_db
 from app.api.v1.endpoints.bot import BOT_API_TOKEN
+from app.services.channel_config import resolve_feishu_runtime_config
 
 router = APIRouter()
 
@@ -48,25 +49,7 @@ async def feishu_start(
         # 状态漂移：running=true 但 WS 已断，先清理再重启
         feishu_listener.stop_listener()
 
-    # 从数据库读取 feishu 配置
-    from sqlalchemy import text as sa_text
-    row = (
-        await db.execute(
-            sa_text(
-                "SELECT content FROM agent_configs "
-                "WHERE tenant_id = :tid AND file_name = 'feishu'"
-            ),
-            {"tid": tenant_id},
-        )
-    ).fetchone()
-
-    if not row:
-        raise HTTPException(
-            status_code=404,
-            detail="未找到飞书配置，请先在「秒算配置 → 飞书」页面填写 App ID 和 App Secret 并保存",
-        )
-
-    config = feishu_listener.parse_feishu_config(row[0])
+    config = await resolve_feishu_runtime_config(db, tenant_id)
     app_id = config.get("app_id", "")
     app_secret = config.get("app_secret", "")
     feishu_tenant_id = config.get("tenant_id", tenant_id)
@@ -75,7 +58,7 @@ async def feishu_start(
     if not app_id or app_id.startswith("cli_xxx") or not app_secret or app_secret.startswith("xxx"):
         raise HTTPException(
             status_code=400,
-            detail="飞书配置不完整，请在配置页面填写真实的 App ID 和 App Secret",
+            detail="飞书配置不完整，请在「秒算配置 → 渠道接入」填写真实的 App ID 和 App Secret",
         )
 
     feishu_listener.start_listener(app_id, app_secret, feishu_tenant_id)

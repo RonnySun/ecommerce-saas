@@ -1,5 +1,7 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import stats, auth, finance, bot, import_data, stores, export, agent, agent_config, feishu_bot
+from app.api.v1.endpoints import (
+    stats, auth, finance, bot, import_data, stores, export, agent, agent_config, feishu_bot, dingtalk_bot, agent_channel, agent_model
+)
 
 router = APIRouter()
 router.include_router(stats.router, prefix="/stats", tags=["统计数据"])
@@ -11,4 +13,7 @@ router.include_router(stores.router, prefix="/stores", tags=["店铺管理"])
 router.include_router(export.router, prefix="/export", tags=["数据导出"])
 router.include_router(agent.router, prefix="/agent", tags=["秒算Agent"])
 router.include_router(agent_config.router, prefix="/agent/config", tags=["秒算配置"])
+router.include_router(agent_channel.router, prefix="/agent/channel", tags=["渠道接入配置"])
+router.include_router(agent_model.router, prefix="/agent/model", tags=["模型配置"])
 router.include_router(feishu_bot.router, prefix="/feishu", tags=["飞书监听器"])
+router.include_router(dingtalk_bot.router, prefix="/dingtalk", tags=["钉钉监听器"])

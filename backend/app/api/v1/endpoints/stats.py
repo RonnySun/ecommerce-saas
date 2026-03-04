@@ -5,11 +5,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from datetime import datetime, timedelta
-from decimal import Decimal
-from typing import Optional
 
 from app.db.base import get_db
-from app.models import Tenant, Store, Order, DailyStat
+from app.models import Store, Order
 
 router = APIRouter()
 
@@ -18,6 +16,7 @@ router = APIRouter()
 async def get_overview(
     tenant_id: int = Query(1, description="租户ID"),
     days: int = Query(7, description="天数"),
+    store_id: int = Query(0, description="店铺ID，0表示全部"),
     db: AsyncSession = Depends(get_db),
 ):
     """首页核心指标：总GMV、利润、订单数、ROI"""
@@ -26,25 +25,34 @@ async def get_overview(
     prev_start = start_date - timedelta(days=days)
 
     # 获取该租户的所有店铺ID
-    store_ids_result = await db.execute(
-        select(Store.id).where(Store.tenant_id == tenant_id, Store.is_active == True)
-    )
+    store_query = select(Store.id).where(Store.tenant_id == tenant_id, Store.is_active == True)
+    if store_id:
+        store_query = store_query.where(Store.id == store_id)
+    store_ids_result = await db.execute(store_query)
     store_ids = [r[0] for r in store_ids_result.fetchall()]
 
     if not store_ids:
-        return {"error": "无店铺数据"}
+        return {
+            "gmv": 0,
+            "profit": 0,
+            "orders": 0,
+            "roi": 0,
+            "gmv_change": 0,
+            "profit_change": 0,
+            "orders_change": 0,
+        }
 
     def stats_query(start, end):
         return select(
-            func.sum(DailyStat.gmv).label("total_gmv"),
-            func.sum(DailyStat.net_profit).label("total_profit"),
-            func.sum(DailyStat.orders_count).label("total_orders"),
-            func.sum(DailyStat.ad_cost).label("total_ad_cost"),
+            func.sum(Order.gmv).label("total_gmv"),
+            func.sum(Order.net_profit).label("total_profit"),
+            func.count(Order.id).label("total_orders"),
+            func.sum(Order.ad_cost).label("total_ad_cost"),
         ).where(
             and_(
-                DailyStat.store_id.in_(store_ids),
-                DailyStat.stat_date >= start,
-                DailyStat.stat_date <= end,
+                Order.store_id.in_(store_ids),
+                Order.order_date >= start,
+                Order.order_date < end,
             )
         )
 
@@ -74,32 +82,36 @@ async def get_overview(
 async def get_trend(
     tenant_id: int = Query(1),
     days: int = Query(7),
+    store_id: int = Query(0, description="店铺ID，0表示全部"),
     db: AsyncSession = Depends(get_db),
 ):
     """趋势图数据：每天的GMV/利润/广告费"""
     start_date = datetime.now() - timedelta(days=days)
 
-    store_ids_result = await db.execute(
-        select(Store.id).where(Store.tenant_id == tenant_id, Store.is_active == True)
-    )
+    store_query = select(Store.id).where(Store.tenant_id == tenant_id, Store.is_active == True)
+    if store_id:
+        store_query = store_query.where(Store.id == store_id)
+    store_ids_result = await db.execute(store_query)
     store_ids = [r[0] for r in store_ids_result.fetchall()]
+    if not store_ids:
+        return []
 
     result = await db.execute(
         select(
-            func.date(DailyStat.stat_date).label("date"),
-            func.sum(DailyStat.gmv).label("gmv"),
-            func.sum(DailyStat.net_profit).label("profit"),
-            func.sum(DailyStat.ad_cost).label("ad_cost"),
-            func.sum(DailyStat.orders_count).label("orders"),
+            func.date(Order.order_date).label("date"),
+            func.sum(Order.gmv).label("gmv"),
+            func.sum(Order.net_profit).label("profit"),
+            func.sum(Order.ad_cost).label("ad_cost"),
+            func.count(Order.id).label("orders"),
         )
         .where(
             and_(
-                DailyStat.store_id.in_(store_ids),
-                DailyStat.stat_date >= start_date,
+                Order.store_id.in_(store_ids),
+                Order.order_date >= start_date,
             )
         )
-        .group_by(func.date(DailyStat.stat_date))
-        .order_by(func.date(DailyStat.stat_date))
+        .group_by(func.date(Order.order_date))
+        .order_by(func.date(Order.order_date))
     )
 
     rows = result.fetchall()
@@ -119,31 +131,37 @@ async def get_trend(
 async def get_stores_stats(
     tenant_id: int = Query(1),
     days: int = Query(1),
+    store_id: int = Query(0, description="店铺ID，0表示全部"),
     db: AsyncSession = Depends(get_db),
 ):
     """各店铺今日/近N天汇总数据"""
     start_date = datetime.now() - timedelta(days=days)
 
-    result = await db.execute(
+    query = (
         select(
             Store.id,
             Store.name,
             Store.platform,
-            func.sum(DailyStat.gmv).label("gmv"),
-            func.sum(DailyStat.net_profit).label("profit"),
-            func.sum(DailyStat.ad_cost).label("ad_cost"),
-            func.sum(DailyStat.orders_count).label("orders"),
+            func.sum(Order.gmv).label("gmv"),
+            func.sum(Order.net_profit).label("profit"),
+            func.sum(Order.ad_cost).label("ad_cost"),
+            func.count(Order.id).label("orders"),
         )
-        .join(DailyStat, DailyStat.store_id == Store.id)
+        .join(Order, Order.store_id == Store.id)
         .where(
             and_(
                 Store.tenant_id == tenant_id,
-                DailyStat.stat_date >= start_date,
+                Store.is_active == True,
+                Order.order_date >= start_date,
             )
         )
         .group_by(Store.id, Store.name, Store.platform)
-        .order_by(func.sum(DailyStat.gmv).desc())
+        .order_by(func.sum(Order.gmv).desc())
     )
+    if store_id:
+        query = query.where(Store.id == store_id)
+
+    result = await db.execute(query)
 
     rows = result.fetchall()
     return [
@@ -155,7 +173,7 @@ async def get_stores_stats(
             "profit": float(r.profit or 0),
             "ad_cost": float(r.ad_cost or 0),
             "orders": int(r.orders or 0),
-            "roi": round(float(r.gmv or 0) / float(r.ad_cost or 1), 2),
+            "roi": round(float(r.gmv or 0) / float(r.ad_cost or 1), 2) if float(r.ad_cost or 0) > 0 else 0,
         }
         for r in rows
     ]
